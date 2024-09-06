@@ -11,9 +11,12 @@ def cli_menu():
     parser.add_option("-d", "--destenationport", dest="destenation_port", help="Destination port where the target service is")
     parser.add_option("-t", "--target", dest="target", help="Victim IP")
 
+
     (options, args) = parser.parse_args()
+
     print(options)
     return options, args
 
 if __name__ == "__main__":
+   print(Fore.GREEN)
    (options, args) = cli_menu()
