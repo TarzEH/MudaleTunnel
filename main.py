@@ -37,7 +37,7 @@ def printer_menu():
  """
 
     print(chr(27) + "[2J")
-    writer(open_ascii, delay=0.0010)
+    writer(open_ascii, delay=0.00010)
 
 
 
