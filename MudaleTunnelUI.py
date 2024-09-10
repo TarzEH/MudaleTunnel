@@ -33,6 +33,8 @@ class MudaleTunnelUI:
 
 
         """
+        print("[bold blue]"+self.logo)
+        print("[bold red]"+self.myip)
 
     # the menu
     def cli_menu(
@@ -59,8 +61,6 @@ class MudaleTunnelUI:
             str, typer.Option("-t", "--target", prompt=True, help="Victim IP")
         ],
     ):
-        print("[bold blue]"+self.logo)
-        print("[bold red]"+self.myip)
         self.spinnersquare(
             descriptiontask=f"connecting to {target} at port: {dst_port}"
         )
