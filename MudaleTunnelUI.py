@@ -34,7 +34,7 @@ class MudaleTunnelUI:
 
         """
         print("[bold blue]"+self.logo)
-        print("[bold red]"+self.myip)
+        print("[bold red]"+ "YOUR IP: "+ self.myip)
 
     # the menu
     def cli_menu(
@@ -65,6 +65,8 @@ class MudaleTunnelUI:
             descriptiontask=f"connecting to {target} at port: {dst_port}"
         )
 
+
+    #square animaion at loading
     def spinnersquare(
         self, descriptiontask: str, delay: float = 5, final_message: str = "Done!"
     ):
