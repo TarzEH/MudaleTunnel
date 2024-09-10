@@ -1,5 +1,5 @@
 import typer
-from MudaleTunnel.MudaleTunnelUI import MudaleTunnelUI
+from MudaleTunnelUI import MudaleTunnelUI
 
 
 if __name__ == "__main__":
