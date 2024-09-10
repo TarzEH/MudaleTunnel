@@ -1,32 +1,28 @@
-from colorama import Fore
-import optparse
+import sys
+import time
+from click import prompt
+import typer
+from typing_extensions import Annotated
+from rich.progress import track
+from graphic import printer_menu, writer, probar, spinnersquare
+
+import socket
+myip = [(s.connect(('8.8.8.8', 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
 
 
-def cli_menu():
-    parser = optparse.OptionParser(
-        usage="Usage: %prog [options]",
-        description="This is a simple CLI tool to specify ports and target.",
-    )
 
-    parser.add_option(
-        "-s",
-        "--sourceport",
-        dest="source_port",
-        help="Source port that reflects the target service",
-    )
-    parser.add_option(
-        "-d",
-        "--destenationport",
-        dest="destenation_port",
-        help="Destination port where the target service is",
-    )
-    parser.add_option("-t", "--target", dest="target", help="Victim IP")
-
-    (options, args) = parser.parse_args()
-    print(options)
-    return options, args
+#the menu 
+def cli_menu(
+    src_port: Annotated[int, typer.Option("-s","--srcport", prompt=True, 
+                                          help="Source port that reflects the target service")],
+    dst_port: Annotated[int, typer.Option("-d","--dstport", prompt=True, 
+                                          help="Destination port where the target service is")],
+    target: Annotated[str, typer.Option("-t", "--target", prompt=True ,help="Victim IP")]
+):
+    spinnersquare(descriptiontask=f"connecting to {target} at port: {dst_port}")
 
 
 if __name__ == "__main__":
-    print(Fore.GREEN)
-    (options, args) = cli_menu()
+    printer_menu()
+    # typer.run(probar)
+    typer.run(cli_menu)
