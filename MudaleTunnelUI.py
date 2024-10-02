@@ -34,11 +34,6 @@ class MudaleTunnelUI:
         
         
         
-        
-        
-        
-        
-        
         """
         print(f"[bold blue]{self.logo}")
         print(f"[bold red]{self.myip}")
