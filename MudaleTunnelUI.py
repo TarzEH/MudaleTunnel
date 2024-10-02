@@ -8,17 +8,17 @@ import urllib.request
 from typing_extensions import Annotated
 from rich import print
 from rich.progress import Progress, SpinnerColumn, TextColumn, track
+from rich.table import Table
+
 
 class MudaleTunnelUI:
 
     def __init__(self):
-        # Get the local IP address
+        
         self.myip = [
             (s.connect(("8.8.8.8", 53)), s.getsockname()[0], s.close())
             for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]
         ][0][1]
-
-        # Define the logo
         self.logo = r"""   
         ▄▄       ▄▄  ▄         ▄  ▄▄▄▄▄▄▄▄▄▄   ▄▄▄▄▄▄▄▄▄▄▄  ▄            ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄         ▄  ▄▄        ▄  ▄▄        ▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄                
         ▐░░▌     ▐░░▌▐░▌       ▐░▌▐░░░░░░░░░░▌ ▐░░░░░░░░░░░▌▐░▌          ▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░▌       ▐░▌▐░░▌      ▐░▌▐░░▌      ▐░▌▐░░░░░░░░░░░▌▐░▌               
@@ -31,9 +31,17 @@ class MudaleTunnelUI:
         ▐░▌       ▐░▌▐░█▄▄▄▄▄▄▄█░▌▐░█▄▄▄▄▄▄▄█░▌▐░▌       ▐░▌▐░█▄▄▄▄▄▄▄▄▄ ▐░█▄▄▄▄▄▄▄▄▄      ▐░▌     ▐░█▄▄▄▄▄▄▄█░▌▐░▌     ▐░▐░▌▐░▌     ▐░▐░▌▐░█▄▄▄▄▄▄▄▄▄ ▐░█▄▄▄▄▄▄▄▄▄      
         ▐░▌       ▐░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░▌ ▐░▌       ▐░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌     ▐░▌     ▐░░░░░░░░░░░▌▐░▌      ▐░░▌▐░▌      ▐░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌     
         ▀         ▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀   ▀         ▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀       ▀       ▀▀▀▀▀▀▀▀▀▀▀  ▀        ▀▀  ▀        ▀▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀      
+        
+        
+        
+        
+        
+        
+        
+        
         """
         print(f"[bold blue]{self.logo}")
-        print(f"[bold red]Your IP Address: {self.myip}")
+        print(f"[bold red]{self.myip}")
 
     def check_os(self):
         os_type = platform.system()
@@ -45,7 +53,7 @@ class MudaleTunnelUI:
             subprocess.run(["nmap", "--version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             print("[green]nmap is already installed.[/green]")
             return True
-        except (FileNotFoundError, subprocess.CalledProcessError):
+        except FileNotFoundError:
             print("[red]nmap is not installed.[/red]")
             return False
 
@@ -54,15 +62,14 @@ class MudaleTunnelUI:
             subprocess.run(["choco", "-v"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             print("[green]Chocolatey is already installed.[/green]")
             return True
-        except (FileNotFoundError, subprocess.CalledProcessError):
+        except FileNotFoundError:
             print("[red]Chocolatey is not installed.[/red]")
             return False
 
     def install_chocolatey(self):
         approval = input("Chocolatey is required to install nmap. Would you like to install Chocolatey? (y/n): ").lower()
         if approval == 'y':
-            install_command = '''Set-ExecutionPolicy Bypass -Scope Process -Force; \
-[System.Net.WebClient]::new().DownloadString('https://community.chocolatey.org/install.ps1') | Invoke-Expression'''
+            install_command = '''Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.WebClient]::new().DownloadString('https://community.chocolatey.org/install.ps1') | Invoke-Expression'''
             subprocess.run(["powershell", "-Command", install_command], check=True)
             print("[green]Chocolatey installed successfully.[/green]")
         else:
@@ -75,7 +82,7 @@ class MudaleTunnelUI:
             subprocess.run(["brew", "--version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             print("[green]Homebrew is already installed.[/green]")
             return True
-        except (FileNotFoundError, subprocess.CalledProcessError):
+        except FileNotFoundError:
             print("[red]Homebrew is not installed.[/red]")
             return False
 
@@ -83,7 +90,7 @@ class MudaleTunnelUI:
         approval = input("Homebrew is required to install nmap. Would you like to install Homebrew? (y/n): ").lower()
         if approval == 'y':
             install_command = '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
-            subprocess.run(install_command, shell=True, check=True)
+            subprocess.run(["/bin/bash", "-c", install_command], check=True)
             print("[green]Homebrew installed successfully.[/green]")
         else:
             print("[yellow]Installation canceled by user.[/yellow]")
@@ -94,14 +101,11 @@ class MudaleTunnelUI:
         approval = input("nmap is not installed. Would you like to download and install it? (y/n): ").lower()
         if approval == 'y':
             if os_type == "Linux":
-                distro = platform.linux_distribution()[0] if hasattr(platform, 'linux_distribution') else ""
+                distro = platform.linux_distribution()[0]
                 if 'Ubuntu' in distro or 'Debian' in distro:
-                    subprocess.run(["sudo", "apt-get", "install", "nmap", "-y"], check=True)
+                    subprocess.run(["sudo", "apt-get", "install", "nmap", "-y"])
                 elif 'CentOS' in distro or 'RedHat' in distro:
-                    subprocess.run(["sudo", "yum", "install", "nmap", "-y"], check=True)
-                else:
-                    print("[red]Unsupported Linux distribution. Please install nmap manually.[/red]")
-                    return
+                    subprocess.run(["sudo", "yum", "install", "nmap", "-y"])
                 print("[green]nmap installed successfully.[/green]")
             elif os_type == "Windows":
                 if not self.check_chocolatey_installed():
@@ -115,27 +119,48 @@ class MudaleTunnelUI:
                         return  # Exit if user cancels Homebrew installation
                 subprocess.run(["brew", "install", "nmap"], check=True)
                 print("[green]nmap installed successfully on macOS via Homebrew.[/green]")
-            else:
-                print("[red]Unsupported operating system. Please install nmap manually.[/red]")
         else:
             print("[yellow]Installation canceled by user.[/yellow]")
 
-    def cli_menu(
-        self,
-        src_port: Annotated[int, typer.Option("-s", "--srcport", prompt=True, help="Source port that reflects the target service")],
-        dst_port: Annotated[int, typer.Option("-d", "--dstport", prompt=True, help="Destination port where the target service is")],
-        target: Annotated[str, typer.Option("-t", "--target", prompt=True, help="Victim IP")]
-    ):
-        # Check and install nmap if necessary
+    def scan_nmap_services(self, target: str):
+        # Perform the nmap scan
+        print(f"Starting nmap scan on {target}...")
+        try:
+            result = subprocess.run(["nmap", "-sV", target], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            output = result.stdout
+            if "open" in output:
+                print("[green]Scan completed! Listing open services:[/green]")
+                self.display_open_services(output)
+            else:
+                print("[yellow]No open services found on the target.[/yellow]")
+        except Exception as e:
+            print(f"[red]Error running nmap scan: {e}[/red]")
+
+    def display_open_services(self, nmap_output: str):
+        # Parse and display open services
+        table = Table(title="Open Ports and Services")
+        table.add_column("Port", justify="right", style="cyan", no_wrap=True)
+        table.add_column("State", justify="center", style="green")
+        table.add_column("Service", justify="left", style="magenta")
+
+        for line in nmap_output.splitlines():
+            if "open" in line:
+                parts = line.split()
+                port = parts[0]
+                state = parts[1]
+                service = parts[2]
+                table.add_row(port, state, service)
+
+        print(table)
+
+    def cli_menu(self):
         os_type = self.check_os()
         if not self.check_nmap_installed():
             self.install_nmap(os_type)
-            if not self.check_nmap_installed():
-                print("[red]nmap installation failed or was canceled. Exiting...[/red]")
-                return
 
-        # Proceed with your functionality
-        self.spinnersquare(descriptiontask=f"Connecting to {target} at port {dst_port}")
+        # Prompt for target and run nmap scan
+        target = input("Enter the target IP or domain to scan: ")
+        self.scan_nmap_services(target)
 
     def spinnersquare(self, descriptiontask: str, delay: float = 5, final_message: str = "Done!"):
         with Progress(
