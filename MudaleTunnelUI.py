@@ -68,7 +68,6 @@ class MudaleTunnelUI:
         result = subprocess.run(["nmap", "-p-", "-sV", target], stdout=subprocess.PIPE, text=True)
         output = result.stdout
         self.display_open_services(output)
-        self.interactive_shell(output)
 
     def display_open_services(self, nmap_output: str):
         table = Table(title="Open Ports and Services")
@@ -82,45 +81,6 @@ class MudaleTunnelUI:
                 port, state, service = parts[0], parts[1], parts[2]
                 table.add_row(port, state, service)
         print(table)
-
-    def interactive_shell(self, nmap_output: str):
-        services = []
-        for line in nmap_output.splitlines():
-            if "open" in line:
-                parts = line.split()
-                port, service = parts[0], parts[2]
-                services.append((port, service))
-
-        ssh_user = input("Enter the SSH username: ")
-        ssh_host = input("Enter the SSH hostname or IP address: ")
-
-        while True:
-            print("\nAvailable services for tunneling:")
-            for idx, (port, service) in enumerate(services, start=1):
-                print(f"{idx}. Port: {port}, Service: {service}")
-            
-            try:
-                choice = int(input("Select a service number for SSH tunneling or type 0 to exit: "))
-                if choice == 0:
-                    print("Exiting interactive shell.")
-                    break
-                elif 1 <= choice <= len(services):
-                    port, service = services[choice - 1]
-                    print(f"Selected Service: {service} on Port: {port}")
-                    
-                    # Prompt for local port
-                    local_port = input(f"Enter a local port to use for tunneling (default is {port}): ")
-                    if not local_port.isdigit():
-                        print("[red]Invalid input for local port. Using remote port as default.[/red]")
-                        local_port = port
-                    
-                    # SSH tunneling command
-                    ssh_command = f"ssh -L {local_port}:{self.myip}:{port} {ssh_user}@{ssh_host}"
-                    print(f"Use the following command to tunnel over SSH:\n{ssh_command}")
-                else:
-                    print("[red]Invalid selection. Please choose a valid number.[/red]")
-            except ValueError:
-                print("[red]Invalid input. Please enter a number.[/red]")
 
     def cli_menu(self):
         os_type = self.check_os()
