@@ -14,7 +14,6 @@ from rich.table import Table
 class MudaleTunnelUI:
 
     def __init__(self):
-        
         self.myip = [
             (s.connect(("8.8.8.8", 53)), s.getsockname()[0], s.close())
             for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]
@@ -31,9 +30,6 @@ class MudaleTunnelUI:
         ▐░▌       ▐░▌▐░█▄▄▄▄▄▄▄█░▌▐░█▄▄▄▄▄▄▄█░▌▐░▌       ▐░▌▐░█▄▄▄▄▄▄▄▄▄ ▐░█▄▄▄▄▄▄▄▄▄      ▐░▌     ▐░█▄▄▄▄▄▄▄█░▌▐░▌     ▐░▐░▌▐░▌     ▐░▐░▌▐░█▄▄▄▄▄▄▄▄▄ ▐░█▄▄▄▄▄▄▄▄▄      
         ▐░▌       ▐░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░▌ ▐░▌       ▐░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌     ▐░▌     ▐░░░░░░░░░░░▌▐░▌      ▐░░▌▐░▌      ▐░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌     
         ▀         ▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀   ▀         ▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀       ▀       ▀▀▀▀▀▀▀▀▀▀▀  ▀        ▀▀  ▀        ▀▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀      
-        
-        
-        
         """
         print(f"[bold blue]{self.logo}")
         print(f"[bold red]{self.myip}")
@@ -52,117 +48,83 @@ class MudaleTunnelUI:
             print("[red]nmap is not installed.[/red]")
             return False
 
-    def check_chocolatey_installed(self):
-        try:
-            subprocess.run(["choco", "-v"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            print("[green]Chocolatey is already installed.[/green]")
-            return True
-        except FileNotFoundError:
-            print("[red]Chocolatey is not installed.[/red]")
-            return False
-
-    def install_chocolatey(self):
-        approval = input("Chocolatey is required to install nmap. Would you like to install Chocolatey? (y/n): ").lower()
-        if approval == 'y':
-            install_command = '''Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.WebClient]::new().DownloadString('https://community.chocolatey.org/install.ps1') | Invoke-Expression'''
-            subprocess.run(["powershell", "-Command", install_command], check=True)
-            print("[green]Chocolatey installed successfully.[/green]")
-        else:
-            print("[yellow]Installation canceled by user.[/yellow]")
-            return False
-        return True
-
-    def check_homebrew_installed(self):
-        try:
-            subprocess.run(["brew", "--version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            print("[green]Homebrew is already installed.[/green]")
-            return True
-        except FileNotFoundError:
-            print("[red]Homebrew is not installed.[/red]")
-            return False
-
-    def install_homebrew(self):
-        approval = input("Homebrew is required to install nmap. Would you like to install Homebrew? (y/n): ").lower()
-        if approval == 'y':
-            install_command = '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
-            subprocess.run(["/bin/bash", "-c", install_command], check=True)
-            print("[green]Homebrew installed successfully.[/green]")
-        else:
-            print("[yellow]Installation canceled by user.[/yellow]")
-            return False
-        return True
-
     def install_nmap(self, os_type):
-        approval = input("nmap is not installed. Would you like to download and install it? (y/n): ").lower()
-        if approval == 'y':
-            if os_type == "Linux":
-                distro = platform.linux_distribution()[0]
-                if 'Ubuntu' in distro or 'Debian' in distro:
-                    subprocess.run(["sudo", "apt-get", "install", "nmap", "-y"])
-                elif 'CentOS' in distro or 'RedHat' in distro:
-                    subprocess.run(["sudo", "yum", "install", "nmap", "-y"])
-                print("[green]nmap installed successfully.[/green]")
-            elif os_type == "Windows":
-                if not self.check_chocolatey_installed():
-                    if not self.install_chocolatey():
-                        return  # Exit if user cancels Chocolatey installation
-                subprocess.run(["choco", "install", "nmap", "-y"], check=True)
-                print("[green]nmap installed successfully on Windows via Chocolatey.[/green]")
-            elif os_type == "Darwin":
-                if not self.check_homebrew_installed():
-                    if not self.install_homebrew():
-                        return  # Exit if user cancels Homebrew installation
-                subprocess.run(["brew", "install", "nmap"], check=True)
-                print("[green]nmap installed successfully on macOS via Homebrew.[/green]")
-        else:
-            print("[yellow]Installation canceled by user.[/yellow]")
+        if os_type == "Linux":
+            try:
+                subprocess.run(["sudo", "apt-get", "install", "nmap", "-y"], check=True)
+            except Exception:
+                subprocess.run(["sudo", "yum", "install", "nmap", "-y"], check=True)
+        elif os_type == "Windows":
+            if not self.check_chocolatey_installed():
+                self.install_chocolatey()
+            subprocess.run(["choco", "install", "nmap", "-y"], check=True)
+        elif os_type == "Darwin":
+            if not self.check_homebrew_installed():
+                self.install_homebrew()
+            subprocess.run(["brew", "install", "nmap"], check=True)
 
     def scan_nmap_services(self, target: str):
-        # Perform the nmap scan
-        print(f"Starting nmap scan on {target}...")
-        try:
-            result = subprocess.run(["nmap", "-sV", target], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            output = result.stdout
-            if "open" in output:
-                print("[green]Scan completed! Listing open services:[/green]")
-                self.display_open_services(output)
-            else:
-                print("[yellow]No open services found on the target.[/yellow]")
-        except Exception as e:
-            print(f"[red]Error running nmap scan: {e}[/red]")
+        print(f"Starting full nmap scan on {target}...")
+        result = subprocess.run(["nmap", "-p-", "-sV", target], stdout=subprocess.PIPE, text=True)
+        output = result.stdout
+        self.display_open_services(output)
+        self.interactive_shell(output)
 
     def display_open_services(self, nmap_output: str):
-        # Parse and display open services
         table = Table(title="Open Ports and Services")
-        table.add_column("Port", justify="right", style="cyan", no_wrap=True)
-        table.add_column("State", justify="center", style="green")
-        table.add_column("Service", justify="left", style="magenta")
+        table.add_column("Port", style="cyan")
+        table.add_column("State", style="green")
+        table.add_column("Service", style="magenta")
 
         for line in nmap_output.splitlines():
             if "open" in line:
                 parts = line.split()
-                port = parts[0]
-                state = parts[1]
-                service = parts[2]
+                port, state, service = parts[0], parts[1], parts[2]
                 table.add_row(port, state, service)
-
         print(table)
+
+    def interactive_shell(self, nmap_output: str):
+        services = []
+        for line in nmap_output.splitlines():
+            if "open" in line:
+                parts = line.split()
+                port, service = parts[0], parts[2]
+                services.append((port, service))
+
+        ssh_user = input("Enter the SSH username: ")
+        ssh_host = input("Enter the SSH hostname or IP address: ")
+
+        while True:
+            print("\nAvailable services for tunneling:")
+            for idx, (port, service) in enumerate(services, start=1):
+                print(f"{idx}. Port: {port}, Service: {service}")
+            
+            try:
+                choice = int(input("Select a service number for SSH tunneling or type 0 to exit: "))
+                if choice == 0:
+                    print("Exiting interactive shell.")
+                    break
+                elif 1 <= choice <= len(services):
+                    port, service = services[choice - 1]
+                    print(f"Selected Service: {service} on Port: {port}")
+                    
+                    # Prompt for local port
+                    local_port = input(f"Enter a local port to use for tunneling (default is {port}): ")
+                    if not local_port.isdigit():
+                        print("[red]Invalid input for local port. Using remote port as default.[/red]")
+                        local_port = port
+                    
+                    # SSH tunneling command
+                    ssh_command = f"ssh -L {local_port}:{self.myip}:{port} {ssh_user}@{ssh_host}"
+                    print(f"Use the following command to tunnel over SSH:\n{ssh_command}")
+                else:
+                    print("[red]Invalid selection. Please choose a valid number.[/red]")
+            except ValueError:
+                print("[red]Invalid input. Please enter a number.[/red]")
 
     def cli_menu(self):
         os_type = self.check_os()
         if not self.check_nmap_installed():
             self.install_nmap(os_type)
-
-        # Prompt for target and run nmap scan
         target = input("Enter the target IP or domain to scan: ")
         self.scan_nmap_services(target)
-
-    def spinnersquare(self, descriptiontask: str, delay: float = 5, final_message: str = "Done!"):
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            transient=False,
-        ) as progress:
-            progress.add_task(description=f"{descriptiontask}...", total=None)
-            time.sleep(delay)
-        print(f"{final_message}")
