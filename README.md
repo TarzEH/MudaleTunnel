@@ -1,7 +1,3 @@
-To make it ready for direct copy-pasting into your Git repository as a `README.md` file, I'll provide the complete Markdown content. You can simply create a file named `README.md` in the root of your project and paste everything below into it.
-
------
-
 # MudaleTunnel
 
 
