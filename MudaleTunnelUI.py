@@ -122,6 +122,45 @@ class MudaleTunnelUI:
             except ValueError:
                 print("[red]Invalid input. Please enter a number.[/red]")
 
+    def run_with_args(self, target, username=None, ssh_host=None, port=None, local_port=None):
+        """Run with command line arguments instead of interactive mode."""
+        os_type = self.check_os()
+        if not self.check_nmap_installed():
+            self.install_nmap(os_type)
+        
+        print(f"Starting full nmap scan on {target}...")
+        result = subprocess.run(["nmap", "-p-", "-sV", target], stdout=subprocess.PIPE, text=True)
+        output = result.stdout
+        self.display_open_services(output)
+        
+        if username and ssh_host:
+            services = []
+            for line in output.splitlines():
+                if "open" in line:
+                    parts = line.split()
+                    port_info, service = parts[0], parts[2]
+                    services.append((port_info, service))
+            
+            if port:
+                # Find specific port
+                target_service = None
+                for p, s in services:
+                    if str(port) in p:
+                        target_service = (p, s)
+                        break
+                
+                if target_service:
+                    port_info, service = target_service
+                    final_local_port = local_port or port
+                    ssh_command = f"ssh -L {final_local_port}:{self.myip}:{port_info} {username}@{ssh_host}"
+                    print(f"\nSSH Tunnel Command:\n{ssh_command}")
+                else:
+                    print(f"[red]Port {port} not found in scan results[/red]")
+            else:
+                print("\n[yellow]Use --port to specify which service to tunnel[/yellow]")
+        else:
+            print("\n[yellow]Use --user and --ssh-host to generate tunnel command[/yellow]")
+
     def cli_menu(self):
         os_type = self.check_os()
         if not self.check_nmap_installed():

@@ -69,11 +69,37 @@ Before running MudaleTunnel, ensure you have the following:
 
 ## Usage
 
-To run MudaleTunnel, execute the Python script from your terminal:
+## Usage
 
+### Interactive Mode (Default)
 ```bash
+python main.py interactive
+# or simply
 python main.py
 ```
+
+### Command Line Arguments
+```bash
+# Scan only
+python main.py scan 192.168.1.1
+
+# Full tunnel setup
+python main.py scan 192.168.1.1 --user myuser --ssh-host 10.0.0.1 --port 80 --local-port 8080
+
+# Available options:
+#   --user, -u        SSH username
+#   --ssh-host, -s    SSH hostname or IP
+#   --port, -p        Specific port to tunnel
+#   --local-port, -l  Local port for tunneling
+```
+
+### Linux Installation
+1. Download the latest release: `mudaletunnel-linux-v*.tar.gz`
+2. Extract: `tar -xzf mudaletunnel-linux-v*.tar.gz`
+3. Install: `cd linux && sudo ./install.sh`
+4. Run: `mudaletunnel scan 192.168.1.1`
+
+To run MudaleTunnel, execute the Python script from your terminal:
 
 The tool will guide you through the following steps:
 
