@@ -125,11 +125,21 @@ jobs:
         git tag -a "v${{ steps.version.outputs.VERSION }}" -m "Release v${{ steps.version.outputs.VERSION }}"
         git push origin "v${{ steps.version.outputs.VERSION }}"
 
-    - name: Build Linux Release
-      if: hashFiles('build.sh') != ''
+    - name: Build Python Package (wheel/sdist)
+      if: steps.check-tag.outputs.EXISTS != 'true'
+      run: |
+        pip install build
+        python -m build
+        echo "Python packages built:"
+        ls -la dist/* || echo "No packages found"
+
+    - name: Build Linux Release Package
+      if: hashFiles('build.sh') != '' && steps.check-tag.outputs.EXISTS != 'true'
       run: |
         chmod +x build.sh
         ./build.sh
+        echo "Package built successfully"
+        ls -la build/*.tar.gz || echo "No tarball found"
 
     - name: Build Docker Image
       uses: docker/build-push-action@v5
@@ -174,6 +184,8 @@ jobs:
           ### 📖 Documentation
           See [README.md](https://github.com/${{ github.repository }}/blob/master/README.md) for complete usage guide.
         files: |
+          dist/*.whl
+          dist/*.tar.gz
           build/mudaletunnel-linux-v*.tar.gz
           Dockerfile
           docker-compose.yml

@@ -11,6 +11,9 @@ mkdir -p build/linux
 # Copy source files
 cp main.py build/linux/
 cp MudaleTunnelUI.py build/linux/
+cp tunnel_manager.py build/linux/ 2>/dev/null || true
+cp web_app.py build/linux/ 2>/dev/null || true
+cp config.py build/linux/ 2>/dev/null || true
 cp requirements.txt build/linux/
 cp README.md build/linux/
 cp LICENSE build/linux/
@@ -58,12 +61,15 @@ EOF
 
 chmod +x build/linux/install.sh
 
-# Create tarball
+# Get version from setup.py or use default
+VERSION=$(grep -E "version\s*=" setup.py 2>/dev/null | sed -E "s/.*version\s*=\s*['\"]([^'\"]+)['\"].*/\1/" || echo "1.0.0")
+
+# Create tarball with dynamic version
 cd build
-tar -czf mudaletunnel-linux-v1.0.0.tar.gz linux/
+tar -czf mudaletunnel-linux-v${VERSION}.tar.gz linux/
 cd ..
 
-echo "Linux release created: build/mudaletunnel-linux-v1.0.0.tar.gz"
+echo "Linux release created: build/mudaletunnel-linux-v${VERSION}.tar.gz"
 echo ""
 echo "Usage examples:"
 echo "  mudaletunnel interactive                    # Interactive mode"
