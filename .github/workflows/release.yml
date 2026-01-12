@@ -11,24 +11,89 @@ permissions:
 
 jobs:
   build-linux:
+    name: Build Linux Release
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.9'
+        python-version: '3.11'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y nmap openssh-client
     
     - name: Make build script executable
-      run: chmod +x build.sh
+      run: chmod +x build.sh || echo "build.sh not found, skipping"
     
     - name: Build Linux release
+      if: hashFiles('build.sh') != ''
       run: ./build.sh
     
+    - name: Upload Linux artifacts
+      if: hashFiles('build.sh') != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-release
+        path: build/mudaletunnel-linux-v*.tar.gz
+        if-no-files-found: ignore
+
+  build-docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Docker Hub
+      if: github.event_name != 'workflow_dispatch'
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Extract version from tag
+      id: tag
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: ${{ github.event_name != 'workflow_dispatch' }}
+        tags: |
+          mudaletunnel:latest
+          mudaletunnel:${{ steps.tag.outputs.VERSION }}
+        cache-from: type=registry,ref=mudaletunnel:latest
+        cache-to: type=inline
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-linux]
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-release
+        path: ./release-artifacts
+
     - name: Create Release
       uses: softprops/action-gh-release@v1
-      if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: build/mudaletunnel-linux-v*.tar.gz
+        files: |
+          release-artifacts/*
+          Dockerfile
+          docker-compose.yml
         generate_release_notes: true
+        draft: false
+        prerelease: false
