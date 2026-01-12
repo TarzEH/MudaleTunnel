@@ -141,19 +141,56 @@ def run_nmap_scan(target: str, scan_id: str, scan_type: str = "full"):
         scan_tasks[scan_id]["output"] = result.stdout
         scan_tasks[scan_id]["progress"] = "Scan completed"
         
-        # Parse services
+        # Parse services from nmap output
         services = []
+        in_port_section = False
+        
         for line in result.stdout.splitlines():
-            if "open" in line:
+            line = line.strip()
+            
+            # Skip header lines and empty lines
+            if not line or "PORT" in line and "STATE" in line and "SERVICE" in line:
+                in_port_section = True
+                continue
+            
+            # Match nmap port output formats:
+            # "22/tcp   open  ssh"
+            # "80/tcp   open  http    Apache httpd 2.4.41"
+            # "443/tcp  open  https"
+            # "22/tcp   open     ssh"
+            if ("/tcp" in line or "/udp" in line) and "open" in line:
                 parts = line.split()
                 if len(parts) >= 3:
-                    port, state, service = parts[0], parts[1], parts[2]
-                    services.append({
-                        "port": port,
-                        "state": state,
-                        "service": service
-                    })
+                    # Find the index of "open"
+                    open_idx = next((i for i, p in enumerate(parts) if p == "open"), None)
+                    if open_idx is not None and open_idx > 0:
+                        port = parts[0]  # e.g., "22/tcp"
+                        state = parts[open_idx]  # "open"
+                        # Service name is usually after "open"
+                        service = parts[open_idx + 1] if open_idx + 1 < len(parts) else "unknown"
+                        
+                        # Skip if service is "filtered", "closed", etc.
+                        if service not in ["filtered", "closed", "unfiltered"]:
+                            services.append({
+                                "port": port,
+                                "state": state,
+                                "service": service
+                            })
+        
         scan_tasks[scan_id]["services"] = services
+        scan_tasks[scan_id]["service_count"] = len(services)
+        
+        # Log for debugging if no services found
+        if len(services) == 0:
+            # Check if there are any "open" lines at all
+            open_lines = [l for l in result.stdout.splitlines() if "open" in l.lower()]
+            scan_tasks[scan_id]["parse_debug"] = {
+                "output_lines": len(result.stdout.splitlines()),
+                "open_lines_found": len(open_lines),
+                "sample_open_lines": open_lines[:5] if open_lines else [],
+                "sample_output": result.stdout[:1000] if result.stdout else "No output",
+                "stderr": result.stderr[:500] if result.stderr else "No stderr"
+            }
         
     except subprocess.TimeoutExpired:
         scan_tasks[scan_id]["status"] = "failed"
@@ -199,10 +236,20 @@ async def get_scan_status(scan_id: str):
         raise HTTPException(status_code=404, detail="Scan not found")
     
     task = scan_tasks[scan_id].copy()
-    # Remove output if scan is still running (to reduce payload)
+    # Remove large output if scan is still running (to reduce payload)
     if task.get("status") == "running":
         task.pop("output", None)
-        task.pop("services", None)
+        task.pop("parse_debug", None)
+    
+    # Always include services (even if empty list)
+    # This ensures the frontend always gets a services array
+    if "services" not in task:
+        task["services"] = []
+    
+    # Include parse_debug if available (for troubleshooting)
+    if task.get("status") == "completed" and "parse_debug" in task:
+        # Keep parse_debug for completed scans with no services
+        pass
     
     return task
 

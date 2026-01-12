@@ -98,7 +98,7 @@ async function startScan() {
         const response = await fetch('/api/scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target })
+            body: JSON.stringify({ target, scan_type: scanType })
         });
         
         const data = await response.json();
@@ -130,7 +130,17 @@ function pollScanStatus(scanId) {
                 clearInterval(scanInterval);
                 document.getElementById('scanProgress').style.display = 'none';
                 showStatus('success', 'Scan completed!');
-                displayServices(data.services || []);
+                
+                // Always display services (even if empty)
+                const services = data.services || [];
+                console.log('Scan completed, services found:', services.length, services);
+                
+                // Show debug info if no services found
+                if (services.length === 0 && data.parse_debug) {
+                    console.warn('No services parsed. Debug info:', data.parse_debug);
+                }
+                
+                displayServices(services);
                 loadScanHistory(); // Refresh scan history
             } else if (data.status === 'failed') {
                 clearInterval(scanInterval);
@@ -151,42 +161,81 @@ function displayServices(services) {
     const servicesSection = document.getElementById('servicesSection');
     const servicesList = document.getElementById('servicesList');
     
+    if (!servicesSection || !servicesList) {
+        console.error('Services section elements not found');
+        return;
+    }
+    
     if (!services || services.length === 0) {
-        servicesList.innerHTML = '<p>No services found.</p>';
+        servicesList.innerHTML = '<p style="color: #888; padding: 20px;">No open ports found. Try a different scan type or check if the target is reachable.</p>';
         servicesSection.style.display = 'block';
         return;
     }
     
-    servicesList.innerHTML = services.map(service => `
-        <div class="service-item">
-            <div class="service-info">
-                <strong>Port:</strong> ${service.port} | 
-                <strong>Service:</strong> ${service.service} | 
-                <strong>State:</strong> ${service.state}
+    servicesList.innerHTML = services.map(service => {
+        const port = service.port || 'unknown';
+        const serviceName = service.service || 'unknown';
+        const state = service.state || 'unknown';
+        
+        return `
+        <div class="service-item" style="padding: 15px; margin: 10px 0; background: #1a0000; border-left: 4px solid var(--hacker-red); border-radius: 4px;">
+            <div class="service-info" style="margin-bottom: 10px;">
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <div><strong style="color: var(--hacker-red);">Port:</strong> <span style="color: var(--hacker-orange);">${port}</span></div>
+                    <div><strong style="color: var(--hacker-red);">Service:</strong> <span style="color: var(--hacker-orange);">${serviceName}</span></div>
+                    <div><strong style="color: var(--hacker-red);">State:</strong> <span style="color: var(--hacker-orange);">${state}</span></div>
+                </div>
             </div>
-            <button onclick="useServiceForTunnel('${service.port}', '${service.service}')" class="btn-secondary">
-                Use for Tunnel
+            <button onclick="useServiceForTunnel('${port}', '${serviceName}')" class="btn-secondary" style="margin-top: 5px;">
+                🚀 Use for Tunnel
             </button>
         </div>
-    `).join('');
+        `;
+    }).join('');
     
     servicesSection.style.display = 'block';
+    
+    // Scroll to services section with smooth animation
+    setTimeout(() => {
+        servicesSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+    
+    // Show success message
+    showToast(`Found ${services.length} open port(s)!`, 'success');
 }
 
 // Use service for tunnel creation
 function useServiceForTunnel(port, service) {
     // Switch to static tab
-    document.querySelectorAll('.tab-btn')[0].click();
+    const staticTab = document.querySelectorAll('.tab-btn')[0];
+    if (staticTab) {
+        staticTab.click();
+    }
     
-    // Parse port number
+    // Parse port number (handle formats like "22/tcp" or "22")
     const portNum = parseInt(port.split('/')[0]);
     
+    // Get the target from the scan (we need to track this)
+    const scanTarget = document.getElementById('scanTarget').value.trim();
+    
     // Fill form
-    document.getElementById('staticRemotePort').value = portNum;
-    document.getElementById('staticLocalPort').value = portNum;
+    if (document.getElementById('staticRemotePort')) {
+        document.getElementById('staticRemotePort').value = portNum;
+    }
+    if (document.getElementById('staticLocalPort')) {
+        document.getElementById('staticLocalPort').value = portNum;
+    }
+    if (document.getElementById('staticTargetHost') && scanTarget) {
+        document.getElementById('staticTargetHost').value = scanTarget;
+    }
     
     // Scroll to form
-    document.getElementById('staticForm').scrollIntoView({ behavior: 'smooth' });
+    const staticForm = document.getElementById('staticForm');
+    if (staticForm) {
+        staticForm.scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    showToast(`Pre-filled tunnel form with port ${portNum}`, 'info');
 }
 
 // Create static tunnel
