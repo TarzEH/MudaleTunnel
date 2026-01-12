@@ -9,7 +9,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="mudaletunnel",
-    version="2.0.0",
+    version="2.0.1",
     author="TarzEH",
     description="Powerful SSH tunnel management tool with static/dynamic tunneling, web interface, and Docker support",
     long_description=long_description,
