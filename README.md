@@ -60,11 +60,6 @@ docker-compose up -d
 
 Access the web interface at `http://localhost:8000`
 
-<<<<<<< HEAD
-## Usage
-
-### Interactive Mode (Default)
-=======
 **Using Docker directly:**
 ```bash
 docker build -t mudaletunnel .
@@ -78,45 +73,17 @@ See [README_DOCKER.md](README_DOCKER.md) for detailed Docker instructions.
 ## Quick Start
 
 ### CLI Mode
->>>>>>> 621a974 (Major update: Add static/dynamic SSH tunneling, web interface, Docker support, and dark theme)
 ```bash
-python main.py interactive
-# or simply
 python main.py
+# or
+python main.py cli
 ```
 
-<<<<<<< HEAD
-### Command Line Arguments
-```bash
-# Scan only
-python main.py scan 192.168.1.1
-
-# Full tunnel setup
-python main.py scan 192.168.1.1 --user myuser --ssh-host 10.0.0.1 --port 80 --local-port 8080
-
-# Available options:
-#   --user, -u        SSH username
-#   --ssh-host, -s    SSH hostname or IP
-#   --port, -p        Specific port to tunnel
-#   --local-port, -l  Local port for tunneling
-```
-
-### Linux Installation
-1. Download the latest release: `mudaletunnel-linux-v*.tar.gz`
-2. Extract: `tar -xzf mudaletunnel-linux-v*.tar.gz`
-3. Install: `cd linux && sudo ./install.sh`
-4. Run: `mudaletunnel scan 192.168.1.1`
-
-To run MudaleTunnel, execute the Python script from your terminal:
-
-The tool will guide you through the following steps:
-=======
 ### Web Interface Mode
 ```bash
 python main.py web
 ```
 Then open `http://localhost:8000` in your browser.
->>>>>>> 621a974 (Major update: Add static/dynamic SSH tunneling, web interface, Docker support, and dark theme)
 
 ---
 
