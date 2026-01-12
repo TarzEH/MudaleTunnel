@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MUDALE_TUNNEL v2.0 | SSH Tunnel Management System</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>MUDALE_TUNNEL v2.0</h1>
+            <p class="subtitle">[SSH_TUNNEL_MANAGEMENT_SYSTEM]</p>
+            <p class="subtitle" style="font-size: 0.9em; margin-top: 5px;">[STATUS: ONLINE] [MODE: ACTIVE]</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Scan Section -->
+            <section class="card">
+                <h2>[SCAN] Target Scanning</h2>
+                <div class="scan-section">
+                    <div class="input-group">
+                        <input type="text" id="scanTarget" placeholder="Enter target IP or domain (e.g., 192.168.1.1)" />
+                        <button id="scanBtn" onclick="startScan()">Scan</button>
+                    </div>
+                    <div id="scanStatus" class="status-message"></div>
+                    <div id="scanProgress" class="progress-bar" style="display: none;">
+                        <div class="progress-fill"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Services Section -->
+            <section class="card" id="servicesSection" style="display: none;">
+                <h2>[SERVICES] Discovered Services</h2>
+                <div id="servicesList"></div>
+            </section>
+
+            <!-- Tunnel Creation Section -->
+            <section class="card">
+                <h2>[TUNNEL] Create Tunnel</h2>
+                <div class="tunnel-tabs">
+                    <button class="tab-btn active" onclick="switchTab('static')">Static (Port Forward)</button>
+                    <button class="tab-btn" onclick="switchTab('dynamic')">Dynamic (SOCKS Proxy)</button>
+                </div>
+
+                <!-- Static Tunnel Form -->
+                <div id="staticForm" class="tunnel-form">
+                    <div class="form-group">
+                        <label>SSH Username:</label>
+                        <input type="text" id="staticSshUser" placeholder="username" />
+                    </div>
+                    <div class="form-group">
+                        <label>SSH Host:</label>
+                        <input type="text" id="staticSshHost" placeholder="hostname or IP" />
+                    </div>
+                    <div class="form-group">
+                        <label>Target Host:</label>
+                        <input type="text" id="staticTargetHost" placeholder="target IP" />
+                    </div>
+                    <div class="form-group">
+                        <label>Remote Port:</label>
+                        <input type="number" id="staticRemotePort" placeholder="22" />
+                    </div>
+                    <div class="form-group">
+                        <label>Local Port (optional):</label>
+                        <input type="number" id="staticLocalPort" placeholder="auto" />
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="staticExecute" checked />
+                            Execute tunnel automatically
+                        </label>
+                    </div>
+                    <button onclick="createStaticTunnel()" class="btn-primary">Create Static Tunnel</button>
+                </div>
+
+                <!-- Dynamic Tunnel Form -->
+                <div id="dynamicForm" class="tunnel-form" style="display: none;">
+                    <div class="form-group">
+                        <label>SSH Username:</label>
+                        <input type="text" id="dynamicSshUser" placeholder="username" />
+                    </div>
+                    <div class="form-group">
+                        <label>SSH Host:</label>
+                        <input type="text" id="dynamicSshHost" placeholder="hostname or IP" />
+                    </div>
+                    <div class="form-group">
+                        <label>Local SOCKS Port (optional):</label>
+                        <input type="number" id="dynamicLocalPort" placeholder="auto (1080, 8080, 9050)" />
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="dynamicExecute" checked />
+                            Execute tunnel automatically
+                        </label>
+                    </div>
+                    <button onclick="createDynamicTunnel()" class="btn-primary">Create Dynamic Tunnel</button>
+                </div>
+            </section>
+
+            <!-- Active Tunnels Section -->
+            <section class="card">
+                <h2>[ACTIVE] Active Tunnels</h2>
+                <div class="tunnel-actions">
+                    <button onclick="refreshTunnels()" class="btn-secondary">Refresh</button>
+                    <button onclick="stopAllTunnels()" class="btn-danger">Stop All</button>
+                </div>
+                <div id="tunnelsList"></div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Tunnel Details Modal -->
+    <div id="tunnelModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="modalTitle">Tunnel Details</h2>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

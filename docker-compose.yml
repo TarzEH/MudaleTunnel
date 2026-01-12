@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  mudaletunnel:
+    build: .
+    container_name: mudaletunnel
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount SSH config if needed
+      # On Windows, use absolute path: C:/Users/YourUsername/.ssh:/root/.ssh:ro
+      - ~/.ssh:/root/.ssh:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Run web interface by default
+    command: python main.py web --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+    # For CLI mode, override command:
+    # command: python main.py cli
