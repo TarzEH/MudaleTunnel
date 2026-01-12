@@ -4,9 +4,11 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
     branches: [ master, main ]
-    paths:
-      - 'setup.py'  # Only trigger on version changes
   workflow_dispatch:  # Manual trigger
 
 permissions:
@@ -17,27 +19,63 @@ jobs:
     name: Check Version and Create Release
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
       github.event_name == 'workflow_dispatch'
     steps:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
-    - name: Get version from setup.py
+    - name: Generate dynamic version
       id: version
       run: |
         if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          # Use tag version if pushing a tag
           VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "Using tag version: $VERSION"
         else
-          VERSION=$(grep -E "version\s*=" setup.py | sed -E "s/.*version\s*=\s*['\"]([^'\"]+)['\"].*/\1/")
+          # Auto-generate version from latest tag or use base version
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -z "$LATEST_TAG" ]; then
+            # No tags exist - use base version from setup.py or default
+            BASE_VERSION=$(grep -E "version\s*=" setup.py | sed -E "s/.*version\s*=\s*['\"]([^'\"]+)['\"].*/\1/" || echo "2.0.0")
+            VERSION="$BASE_VERSION"
+            echo "No tags found - using base version: $VERSION"
+          else
+            # Get latest version from tag
+            LATEST_VERSION="${LATEST_TAG#v}"
+            echo "Latest tag version: $LATEST_VERSION"
+            
+            # Auto-increment patch version (e.g., 2.0.0 -> 2.0.1)
+            IFS='.' read -r -a VERSION_PARTS <<< "$LATEST_VERSION"
+            MAJOR="${VERSION_PARTS[0]}"
+            MINOR="${VERSION_PARTS[1]}"
+            PATCH="${VERSION_PARTS[2]:-0}"
+            
+            # Increment patch version
+            PATCH=$((PATCH + 1))
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            echo "Auto-incremented version: $LATEST_VERSION -> $VERSION"
+          fi
         fi
+        
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-        echo "Version: $VERSION"
+        echo "Final version: $VERSION"
+        
+        # Update setup.py with new version (for auto-release)
+        if [[ "${{ github.ref }}" != refs/tags/v* ]] && [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+          sed -i "s/version\s*=\s*['\"][^'\"]*['\"]/version=\"$VERSION\"/" setup.py
+          echo "Updated setup.py with version: $VERSION"
+        fi
 
     - name: Check if tag exists (for auto-release)
       id: check-tag
-      if: github.ref != 'refs/tags/v*'
+      if: |
+        (github.event_name == 'workflow_run') ||
+        (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/v'))
       run: |
         if git rev-parse "v${{ steps.version.outputs.VERSION }}" >/dev/null 2>&1; then
           echo "EXISTS=true" >> $GITHUB_OUTPUT
@@ -47,8 +85,22 @@ jobs:
           echo "Tag v${{ steps.version.outputs.VERSION }} does not exist - will create release"
         fi
 
+    - name: Commit version update (for auto-release)
+      if: |
+        github.event_name == 'workflow_run' &&
+        steps.check-tag.outputs.EXISTS == 'false'
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add setup.py
+        git commit -m "Bump version to ${{ steps.version.outputs.VERSION }} [skip ci]" || echo "No changes to commit"
+        git push origin HEAD:${{ github.event.workflow_run.head_branch }} || echo "Push failed or no changes"
+
     - name: Create Git Tag (auto-release)
-      if: steps.check-tag.outputs.EXISTS == 'false' && github.ref != 'refs/tags/v*'
+      if: |
+        steps.check-tag.outputs.EXISTS == 'false' &&
+        ((github.event_name == 'workflow_run') ||
+         (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/v')))
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
