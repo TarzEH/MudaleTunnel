@@ -4,96 +4,115 @@ on:
   push:
     tags:
       - 'v*'
+    branches: [ master, main ]
+    paths:
+      - 'setup.py'
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+    branches: [ master, main ]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build-linux:
-    name: Build Linux Release
+  check-and-release:
+    name: Check Version and Create Release
     runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')) ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      github.event_name == 'workflow_dispatch'
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
-    
-    - name: Install system dependencies
+        fetch-depth: 0
+
+    - name: Get version from setup.py
+      id: version
       run: |
-        sudo apt-get update
-        sudo apt-get install -y nmap openssh-client
-    
-    - name: Make build script executable
-      run: chmod +x build.sh || echo "build.sh not found, skipping"
-    
-    - name: Build Linux release
+        if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          VERSION="${GITHUB_REF#refs/tags/v}"
+        else
+          VERSION=$(grep -E "version\s*=" setup.py | sed -E "s/.*version\s*=\s*['\"]([^'\"]+)['\"].*/\1/")
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+
+    - name: Check if tag exists (for auto-release)
+      id: check-tag
+      if: github.ref != 'refs/tags/v*'
+      run: |
+        if git rev-parse "v${{ steps.version.outputs.VERSION }}" >/dev/null 2>&1; then
+          echo "EXISTS=true" >> $GITHUB_OUTPUT
+          echo "Tag v${{ steps.version.outputs.VERSION }} already exists - skipping"
+        else
+          echo "EXISTS=false" >> $GITHUB_OUTPUT
+          echo "Tag v${{ steps.version.outputs.VERSION }} does not exist - will create release"
+        fi
+
+    - name: Create Git Tag (auto-release)
+      if: steps.check-tag.outputs.EXISTS == 'false' && github.ref != 'refs/tags/v*'
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git tag -a "v${{ steps.version.outputs.VERSION }}" -m "Release v${{ steps.version.outputs.VERSION }}"
+        git push origin "v${{ steps.version.outputs.VERSION }}"
+
+    - name: Build Linux Release
       if: hashFiles('build.sh') != ''
-      run: ./build.sh
-    
-    - name: Upload Linux artifacts
-      if: hashFiles('build.sh') != ''
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-release
-        path: build/mudaletunnel-linux-v*.tar.gz
-        if-no-files-found: ignore
+      run: |
+        chmod +x build.sh
+        ./build.sh
 
-  build-docker:
-    name: Build and Push Docker Image
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Login to Docker Hub
-      if: github.event_name != 'workflow_dispatch'
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Extract version from tag
-      id: tag
-      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-    - name: Build and push Docker image
+    - name: Build Docker Image
       uses: docker/build-push-action@v5
       with:
         context: .
-        push: ${{ github.event_name != 'workflow_dispatch' }}
-        tags: |
-          mudaletunnel:latest
-          mudaletunnel:${{ steps.tag.outputs.VERSION }}
-        cache-from: type=registry,ref=mudaletunnel:latest
-        cache-to: type=inline
+        push: false
+        tags: mudaletunnel:${{ steps.version.outputs.VERSION }}
+      continue-on-error: true
 
-  create-release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    needs: [build-linux]
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: linux-release
-        path: ./release-artifacts
-
-    - name: Create Release
+    - name: Create GitHub Release
+      if: steps.check-tag.outputs.EXISTS != 'true'
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: v${{ steps.version.outputs.VERSION }}
+        name: Release v${{ steps.version.outputs.VERSION }}
+        body: |
+          ## 🚀 MudaleTunnel v${{ steps.version.outputs.VERSION }}
+
+          ### ✨ Features
+          - **Static SSH Tunneling** (ssh -L) for port forwarding
+          - **Dynamic SSH Tunneling** (ssh -D) for SOCKS proxy
+          - **Modern Web Interface** with real-time updates
+          - **Docker Support** with docker-compose
+          - **Dark Hacking-Themed UI**
+          - **Comprehensive Tunnel Management**
+          - **Tunnel Logs and Metrics**
+          - **Cross-platform Support** (Windows, Linux, macOS)
+
+          ### 📦 Installation
+          ```bash
+          pip install -r requirements.txt
+          # or
+          docker-compose up -d
+          ```
+
+          ### 🚀 Quick Start
+          ```bash
+          python main.py web  # Web interface
+          python main.py cli  # CLI mode
+          ```
+
+          ### 📖 Documentation
+          See [README.md](https://github.com/${{ github.repository }}/blob/master/README.md) for complete usage guide.
         files: |
-          release-artifacts/*
+          build/mudaletunnel-linux-v*.tar.gz
           Dockerfile
           docker-compose.yml
-        generate_release_notes: true
         draft: false
         prerelease: false
+        generate_release_notes: true
