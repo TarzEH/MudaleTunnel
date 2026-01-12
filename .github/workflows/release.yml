@@ -8,7 +8,7 @@ on:
     workflows: ["CI"]
     types:
       - completed
-    branches: [ master, main ]
+    branches: [ master, main ]  # Only trigger on master/main, not dev
   workflow_dispatch:  # Manual trigger
 
 permissions:
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'master' || github.event.workflow_run.head_branch == 'main')) ||
       github.event_name == 'workflow_dispatch'
     steps:
     - uses: actions/checkout@v4
@@ -28,8 +28,25 @@ jobs:
         fetch-depth: 0
         ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
+    - name: Check branch (only release on master/main)
+      id: check-branch
+      if: github.event_name == 'workflow_run'
+      run: |
+        BRANCH="${{ github.event.workflow_run.head_branch }}"
+        if [[ "$BRANCH" == "master" || "$BRANCH" == "main" ]]; then
+          echo "Branch is $BRANCH - proceeding with release"
+          echo "SHOULD_RELEASE=true" >> $GITHUB_OUTPUT
+        else
+          echo "Branch is $BRANCH - skipping release (only master/main create releases)"
+          echo "SHOULD_RELEASE=false" >> $GITHUB_OUTPUT
+        fi
+
     - name: Generate dynamic version
       id: version
+      if: |
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_run' && steps.check-branch.outputs.SHOULD_RELEASE == 'true') ||
+        github.event_name == 'workflow_dispatch'
       run: |
         if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
           # Use tag version if pushing a tag
@@ -74,7 +91,7 @@ jobs:
     - name: Check if tag exists (for auto-release)
       id: check-tag
       if: |
-        (github.event_name == 'workflow_run') ||
+        (github.event_name == 'workflow_run' && steps.check-branch.outputs.SHOULD_RELEASE == 'true') ||
         (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/v'))
       run: |
         if git rev-parse "v${{ steps.version.outputs.VERSION }}" >/dev/null 2>&1; then
@@ -88,6 +105,7 @@ jobs:
     - name: Commit version update (for auto-release)
       if: |
         github.event_name == 'workflow_run' &&
+        steps.check-branch.outputs.SHOULD_RELEASE == 'true' &&
         steps.check-tag.outputs.EXISTS == 'false'
       run: |
         git config user.name "github-actions[bot]"
@@ -99,7 +117,7 @@ jobs:
     - name: Create Git Tag (auto-release)
       if: |
         steps.check-tag.outputs.EXISTS == 'false' &&
-        ((github.event_name == 'workflow_run') ||
+        ((github.event_name == 'workflow_run' && steps.check-branch.outputs.SHOULD_RELEASE == 'true') ||
          (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/v')))
       run: |
         git config user.name "github-actions[bot]"
