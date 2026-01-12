@@ -14,6 +14,8 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 from collections import deque
 
+import config
+
 
 class TunnelManager:
     """Manages SSH tunnels with thread-safe operations."""
@@ -24,12 +26,14 @@ class TunnelManager:
         self.tunnel_metrics: Dict[str, Dict] = {}  # Store metrics for each tunnel
         self.lock = threading.Lock()
         self.myip = self._get_local_ip()
+        # Port availability cache for performance
+        self._port_cache: Dict[int, Tuple[bool, float]] = {}  # port -> (is_available, timestamp)
     
     def _get_local_ip(self) -> str:
         """Get local IP address."""
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 53))
+            s.connect((config.NMAP_DNS_SERVER, config.NMAP_DNS_PORT))
             ip = s.getsockname()[0]
             s.close()
             return ip
@@ -41,19 +45,40 @@ class TunnelManager:
         return str(uuid.uuid4())
     
     def _is_port_in_use(self, port: int) -> bool:
-        """Check if a port is already in use."""
+        """Check if a port is already in use. Uses caching for performance."""
+        current_time = time.time()
+        
+        # Check cache first
+        if port in self._port_cache:
+            is_available, cache_time = self._port_cache[port]
+            if current_time - cache_time < config.PORT_CHECK_CACHE_TTL:
+                return not is_available
+        
+        # Perform actual check
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
+                s.settimeout(config.PORT_CHECK_TIMEOUT)  # Fast timeout for performance
                 s.bind(('127.0.0.1', port))
-                return False
-            except OSError:
-                return True
+                is_available = True
+            except (OSError, socket.timeout):
+                is_available = False
+        
+        # Update cache
+        self._port_cache[port] = (is_available, current_time)
+        return not is_available
     
-    def _find_free_port(self, start_port: int = 8000) -> int:
+    def _find_free_port(self, start_port: Optional[int] = None) -> int:
         """Find a free port starting from start_port."""
+        if start_port is None:
+            start_port = config.DEFAULT_FREE_PORT_START
         port = start_port
-        while self._is_port_in_use(port):
+        max_attempts = config.MAX_PORT_SEARCH_ATTEMPTS  # Prevent infinite loop
+        attempts = 0
+        while self._is_port_in_use(port) and attempts < max_attempts:
             port += 1
+            attempts += 1
+        if attempts >= max_attempts:
+            raise RuntimeError(f"Could not find free port starting from {start_port}")
         return port
     
     def _parse_port(self, port_str: str) -> int:
@@ -66,7 +91,7 @@ class TunnelManager:
         """Log an event for a tunnel."""
         with self.lock:
             if tunnel_id not in self.tunnel_logs:
-                self.tunnel_logs[tunnel_id] = deque(maxlen=1000)
+                self.tunnel_logs[tunnel_id] = deque(maxlen=config.MAX_LOG_ENTRIES_PER_TUNNEL)
             timestamp = datetime.now().isoformat()
             log_entry = f"[{timestamp}] [{level}] {message}"
             self.tunnel_logs[tunnel_id].append(log_entry)
@@ -156,12 +181,12 @@ class TunnelManager:
         """
         if local_port is None:
             # Try common SOCKS ports
-            for port in [1080, 8080, 9050]:
+            for port in config.DEFAULT_SOCKS_PORTS:
                 if not self._is_port_in_use(port):
                     local_port = port
                     break
             if local_port is None:
-                local_port = self._find_free_port(1080)
+                local_port = self._find_free_port(config.SOCKS_PORT_START)
         
         # Check if local port is in use
         if self._is_port_in_use(local_port):
@@ -221,7 +246,7 @@ class TunnelManager:
             )
         
         # Wait a moment to check if process started successfully
-        time.sleep(0.5)
+        time.sleep(config.SSH_STARTUP_DELAY)
         if process.poll() is not None:
             # Process already terminated (likely failed)
             stderr = process.stderr.read().decode() if process.stderr else "Unknown error"
@@ -230,23 +255,29 @@ class TunnelManager:
         return process
     
     def list_tunnels(self) -> List[Dict]:
-        """List all tunnels (active and inactive)."""
+        """List all tunnels (active and inactive). Optimized to minimize lock time."""
+        # Get tunnel data with minimal lock time
         with self.lock:
-            tunnels = []
-            for tunnel_id, tunnel_info in self.active_tunnels.items():
-                # Check if process is still running
-                process = tunnel_info.get("process")
-                if process:
-                    if process.poll() is not None:
-                        tunnel_info["status"] = "stopped"
-                    else:
-                        tunnel_info["status"] = "active"
+            tunnel_items = list(self.active_tunnels.items())
+        
+        tunnels = []
+        for tunnel_id, tunnel_info in tunnel_items:
+            # Check process status outside lock (process.poll() is thread-safe)
+            process = tunnel_info.get("process")
+            if process:
+                if process.poll() is not None:
+                    tunnel_info["status"] = "stopped"
+                else:
+                    tunnel_info["status"] = "active"
+                    # Update metrics with lock
+                    with self.lock:
                         self._update_metrics(tunnel_id)
-                
-                tunnel_copy = tunnel_info.copy()
-                tunnel_copy.pop("process", None)  # Remove process object for serialization
-                tunnels.append(tunnel_copy)
-            return tunnels
+            
+            tunnel_copy = tunnel_info.copy()
+            tunnel_copy.pop("process", None)  # Remove process object for serialization
+            tunnels.append(tunnel_copy)
+        
+        return tunnels
     
     def get_tunnel(self, tunnel_id: str) -> Optional[Dict]:
         """Get tunnel details by ID."""
@@ -276,7 +307,7 @@ class TunnelManager:
                     
                     # Wait for process to terminate
                     try:
-                        process.wait(timeout=5)
+                        process.wait(timeout=config.SSH_PROCESS_TIMEOUT)
                     except subprocess.TimeoutExpired:
                         process.kill()
                     
@@ -291,16 +322,21 @@ class TunnelManager:
                 return True
     
     def stop_all_tunnels(self) -> int:
-        """Stop all active tunnels."""
+        """Stop all active tunnels. Optimized to get IDs outside lock."""
+        # Get tunnel IDs outside lock to reduce contention
+        with self.lock:
+            tunnel_ids = list(self.active_tunnels.keys())
+        
         count = 0
-        tunnel_ids = list(self.active_tunnels.keys())
         for tunnel_id in tunnel_ids:
             if self.stop_tunnel(tunnel_id):
                 count += 1
         return count
     
-    def get_tunnel_logs(self, tunnel_id: str, limit: int = 100) -> List[str]:
+    def get_tunnel_logs(self, tunnel_id: str, limit: Optional[int] = None) -> List[str]:
         """Get logs for a tunnel."""
+        if limit is None:
+            limit = config.DEFAULT_LOG_LIMIT
         with self.lock:
             if tunnel_id in self.tunnel_logs:
                 logs = list(self.tunnel_logs[tunnel_id])

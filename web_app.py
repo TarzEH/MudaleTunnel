@@ -15,6 +15,7 @@ from pydantic import BaseModel
 import json
 
 from tunnel_manager import TunnelManager
+import config
 
 app = FastAPI(title="MudaleTunnel Web Interface")
 
@@ -31,8 +32,8 @@ else:
 # Shared tunnel manager instance (can be set from main.py)
 tunnel_manager = TunnelManager()
 
-# WebSocket connections for real-time updates
-active_connections: List[WebSocket] = []
+# WebSocket connections for real-time updates (using set for O(1) operations)
+active_connections: set = set()
 
 # Scan tasks storage
 scan_tasks: Dict[str, Dict] = {}
@@ -59,18 +60,16 @@ class DynamicTunnelRequest(BaseModel):
 
 
 async def broadcast_tunnel_update(message: dict):
-    """Broadcast tunnel update to all connected WebSocket clients."""
-    disconnected = []
-    for connection in active_connections:
+    """Broadcast tunnel update to all connected WebSocket clients. Optimized with set."""
+    disconnected = set()
+    for connection in active_connections.copy():  # Copy to avoid modification during iteration
         try:
             await connection.send_json(message)
         except Exception:
-            disconnected.append(connection)
+            disconnected.add(connection)
     
-    # Remove disconnected connections
-    for conn in disconnected:
-        if conn in active_connections:
-            active_connections.remove(conn)
+    # Remove disconnected connections (O(1) with set)
+    active_connections.difference_update(disconnected)
 
 
 def run_nmap_scan(target: str, scan_id: str):
@@ -84,7 +83,7 @@ def run_nmap_scan(target: str, scan_id: str):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=300
+            timeout=config.NMAP_SCAN_TIMEOUT
         )
         
         scan_tasks[scan_id]["status"] = "completed"
@@ -281,7 +280,10 @@ async def stop_all_tunnels():
 
 
 @app.get("/api/tunnels/{tunnel_id}/logs")
-async def get_tunnel_logs(tunnel_id: str, limit: int = 100):
+async def get_tunnel_logs(tunnel_id: str, limit: Optional[int] = None):
+    """Get tunnel logs."""
+    if limit is None:
+        limit = config.DEFAULT_LOG_LIMIT
     """Get tunnel logs."""
     logs = tunnel_manager.get_tunnel_logs(tunnel_id, limit)
     return {"tunnel_id": tunnel_id, "logs": logs}
@@ -307,7 +309,7 @@ async def check_tunnel_health(tunnel_id: str):
 async def websocket_tunnels(websocket: WebSocket):
     """WebSocket endpoint for real-time tunnel updates."""
     await websocket.accept()
-    active_connections.append(websocket)
+    active_connections.add(websocket)  # O(1) addition with set
     
     try:
         # Send initial tunnel list
@@ -321,7 +323,7 @@ async def websocket_tunnels(websocket: WebSocket):
         while True:
             try:
                 # Wait for any message (ping/pong for keepalive)
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=config.WEBSOCKET_TIMEOUT)
                 # Echo back or handle ping
                 if data == "ping":
                     await websocket.send_text("pong")
@@ -331,10 +333,9 @@ async def websocket_tunnels(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     finally:
-        if websocket in active_connections:
-            active_connections.remove(websocket)
+        active_connections.discard(websocket)  # O(1) removal with set
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host=config.DEFAULT_WEB_HOST, port=config.DEFAULT_WEB_PORT)

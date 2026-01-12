@@ -3,6 +3,7 @@ import sys
 import signal
 from MudaleTunnelUI import MudaleTunnelUI
 from tunnel_manager import TunnelManager
+import config
 
 app = typer.Typer()
 tunnel_manager = TunnelManager()
@@ -28,8 +29,8 @@ def cli():
 
 @app.command()
 def web(
-    port: int = typer.Option(8000, "--port", "-p", help="Port for web server"),
-    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host for web server")
+    port: int = typer.Option(config.DEFAULT_WEB_PORT, "--port", "-p", help="Port for web server"),
+    host: str = typer.Option(config.DEFAULT_WEB_HOST, "--host", "-h", help="Host for web server")
 ):
     """Run MudaleTunnel in web interface mode."""
     import uvicorn

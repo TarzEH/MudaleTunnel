@@ -4,8 +4,12 @@ services:
   mudaletunnel:
     build: .
     container_name: mudaletunnel
+    # Standard bridge network (works on all platforms)
+    # For host-accessible tunnels on Linux, uncomment 'network_mode: host' and comment out 'ports:'
     ports:
       - "8000:8000"
+    # Uncomment for host network mode (Linux only - makes tunnels accessible from host):
+    # network_mode: host
     volumes:
       # Mount SSH config if needed
       # On Windows, use absolute path: C:/Users/YourUsername/.ssh:/root/.ssh:ro
