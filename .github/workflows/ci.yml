@@ -47,16 +47,16 @@ jobs:
 
     - name: Check imports
       run: |
-        python -c "import MudaleTunnelUI; import tunnel_manager; import web_app; import main"
+        uv run python -c "import MudaleTunnelUI; import tunnel_manager; import web_app; import main"
         echo "✓ All imports successful"
 
     - name: Test CLI help
       run: |
-        python main.py --help || python main.py cli --help || echo "Help command check skipped"
+        uv run python main.py --help || uv run python main.py cli --help || echo "Help command check skipped"
 
     - name: Test web app import
       run: |
-        python -c "from web_app import app; print('✓ Web app imports successfully')"
+        uv run python -c "from web_app import app; print('✓ Web app imports successfully')"
 
   lint:
     name: Lint Code
