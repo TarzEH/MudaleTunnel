@@ -41,6 +41,7 @@ scan_tasks: Dict[str, Dict] = {}
 
 class ScanRequest(BaseModel):
     target: str
+    scan_type: str = "full"  # quick, full, service, stealth, udp
 
 
 class StaticTunnelRequest(BaseModel):
@@ -59,6 +60,31 @@ class DynamicTunnelRequest(BaseModel):
     execute: bool = True
 
 
+class RemoteTunnelRequest(BaseModel):
+    ssh_user: str
+    ssh_host: str
+    remote_bind_port: int
+    target_host: str
+    target_port: int
+    bind_address: str = "127.0.0.1"
+    execute: bool = True
+
+
+class RemoteDynamicTunnelRequest(BaseModel):
+    ssh_user: str
+    ssh_host: str
+    remote_socks_port: int
+    bind_address: str = "127.0.0.1"
+    execute: bool = True
+
+
+class ProxychainsConfig(BaseModel):
+    proxy_type: str = "socks5"  # socks4, socks5, http
+    proxy_host: str
+    proxy_port: int
+    chain_type: str = "strict_chain"  # strict_chain, dynamic_chain, random_chain
+
+
 async def broadcast_tunnel_update(message: dict):
     """Broadcast tunnel update to all connected WebSocket clients. Optimized with set."""
     disconnected = set()
@@ -72,14 +98,39 @@ async def broadcast_tunnel_update(message: dict):
     active_connections.difference_update(disconnected)
 
 
-def run_nmap_scan(target: str, scan_id: str):
-    """Run nmap scan in background."""
+def get_nmap_command(target: str, scan_type: str) -> list:
+    """Get nmap command based on scan type."""
+    base_cmd = ["nmap"]
+    
+    scan_types = {
+        "quick": ["-F", "-T4"],  # Fast scan, top 100 ports
+        "full": ["-p-", "-sV"],  # All ports, service detection
+        "service": ["-sV", "-sC"],  # Service detection + scripts
+        "stealth": ["-sS", "-T2"],  # SYN scan, slower
+        "udp": ["-sU", "-T4"],  # UDP scan
+        "intense": ["-T4", "-A", "-v"],  # Intense scan with OS detection
+    }
+    
+    if scan_type in scan_types:
+        base_cmd.extend(scan_types[scan_type])
+    else:
+        # Default to full scan
+        base_cmd.extend(["-p-", "-sV"])
+    
+    base_cmd.append(target)
+    return base_cmd
+
+
+def run_nmap_scan(target: str, scan_id: str, scan_type: str = "full"):
+    """Run nmap scan in background with specified scan type."""
     try:
         scan_tasks[scan_id]["status"] = "running"
-        scan_tasks[scan_id]["progress"] = "Starting scan..."
+        scan_tasks[scan_id]["progress"] = f"Starting {scan_type} scan..."
+        scan_tasks[scan_id]["scan_type"] = scan_type
         
+        nmap_cmd = get_nmap_command(target, scan_type)
         result = subprocess.run(
-            ["nmap", "-p-", "-sV", target],
+            nmap_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -136,7 +187,7 @@ async def initiate_scan(scan_request: ScanRequest, background_tasks: BackgroundT
         "created_at": datetime.now().isoformat()
     }
     
-    background_tasks.add_task(run_nmap_scan, scan_request.target, scan_id)
+    background_tasks.add_task(run_nmap_scan, scan_request.target, scan_id, scan_request.scan_type)
     
     return {"scan_id": scan_id, "status": "queued"}
 
@@ -156,6 +207,26 @@ async def get_scan_status(scan_id: str):
     return task
 
 
+@app.get("/api/scans")
+async def get_all_scans():
+    """Get all scan history."""
+    scans = []
+    for scan_id, task in scan_tasks.items():
+        scan_info = {
+            "id": scan_id,
+            "target": task.get("target", "unknown"),
+            "status": task.get("status", "unknown"),
+            "scan_type": task.get("scan_type", "full"),
+            "created_at": task.get("created_at"),
+            "progress": task.get("progress", ""),
+            "service_count": len(task.get("services", []))
+        }
+        scans.append(scan_info)
+    # Sort by created_at descending (newest first)
+    scans.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return {"scans": scans}
+
+
 @app.get("/api/services")
 async def get_services():
     """Get all discovered services from completed scans."""
@@ -165,6 +236,7 @@ async def get_services():
             for service in task["services"]:
                 service["scan_id"] = scan_id
                 service["target"] = task.get("target", "unknown")
+                service["scan_type"] = task.get("scan_type", "full")
                 all_services.append(service)
     return {"services": all_services}
 
@@ -218,6 +290,81 @@ async def create_dynamic_tunnel(tunnel_request: DynamicTunnelRequest):
             "type": "tunnel_created",
             "tunnel_id": tunnel_id,
             "tunnel_type": "dynamic"
+        })
+        
+        tunnel_info = tunnel_manager.get_tunnel(tunnel_id)
+        return {
+            "success": True,
+            "tunnel_id": tunnel_id,
+            "command": ssh_command,
+            "tunnel": tunnel_info
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create tunnel: {str(e)}")
+
+
+@app.post("/api/tunnels/remote")
+async def create_remote_tunnel(tunnel_request: RemoteTunnelRequest):
+    """Create a remote SSH tunnel (reverse port forwarding).
+    
+    Use case: When you can SSH out but can't bind ports on the compromised host.
+    The listening port is bound on the SSH server (attacker machine).
+    """
+    try:
+        tunnel_id, ssh_command = tunnel_manager.create_remote_tunnel(
+            tunnel_request.ssh_user,
+            tunnel_request.ssh_host,
+            tunnel_request.remote_bind_port,
+            tunnel_request.target_host,
+            tunnel_request.target_port,
+            tunnel_request.bind_address,
+            tunnel_request.execute
+        )
+        
+        # Broadcast update
+        await broadcast_tunnel_update({
+            "type": "tunnel_created",
+            "tunnel_id": tunnel_id,
+            "tunnel_type": "remote"
+        })
+        
+        tunnel_info = tunnel_manager.get_tunnel(tunnel_id)
+        return {
+            "success": True,
+            "tunnel_id": tunnel_id,
+            "command": ssh_command,
+            "tunnel": tunnel_info
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create tunnel: {str(e)}")
+
+
+@app.post("/api/tunnels/remote-dynamic")
+async def create_remote_dynamic_tunnel(tunnel_request: RemoteDynamicTunnelRequest):
+    """Create a remote dynamic SSH tunnel (reverse SOCKS proxy).
+    
+    Use case: When you can SSH out but need flexible access to multiple internal services.
+    The SOCKS proxy port is bound on the SSH server (attacker machine).
+    Requires OpenSSH 7.6+ client.
+    """
+    try:
+        tunnel_id, ssh_command = tunnel_manager.create_remote_dynamic_tunnel(
+            tunnel_request.ssh_user,
+            tunnel_request.ssh_host,
+            tunnel_request.remote_socks_port,
+            tunnel_request.bind_address,
+            tunnel_request.execute
+        )
+        
+        # Broadcast update
+        await broadcast_tunnel_update({
+            "type": "tunnel_created",
+            "tunnel_id": tunnel_id,
+            "tunnel_type": "remote_dynamic"
         })
         
         tunnel_info = tunnel_manager.get_tunnel(tunnel_id)

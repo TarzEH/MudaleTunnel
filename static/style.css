@@ -5,31 +5,32 @@
 }
 
 :root {
-    --hacker-green: #00ff41;
-    --hacker-cyan: #00ffff;
-    --hacker-blue: #0080ff;
-    --hacker-purple: #ff00ff;
     --hacker-red: #ff0040;
-    --hacker-yellow: #ffff00;
+    --hacker-red-bright: #ff0066;
+    --hacker-red-dark: #cc0033;
+    --hacker-orange: #ff6600;
+    --hacker-pink: #ff0080;
+    --hacker-purple: #cc00ff;
+    --hacker-yellow: #ffcc00;
     --bg-dark: #0a0a0a;
     --bg-darker: #000000;
-    --bg-card: #0d1117;
-    --bg-card-hover: #161b22;
-    --text-primary: #00ff41;
-    --text-secondary: #00ffff;
-    --text-muted: #6e7681;
-    --border-color: #21262d;
-    --border-glow: rgba(0, 255, 65, 0.3);
-    --shadow-glow: 0 0 10px rgba(0, 255, 65, 0.3), 0 0 20px rgba(0, 255, 65, 0.1);
-    --shadow-lg: 0 0 30px rgba(0, 255, 65, 0.2);
+    --bg-card: #1a0000;
+    --bg-card-hover: #2a0000;
+    --text-primary: #ff0040;
+    --text-secondary: #ff6600;
+    --text-muted: #666;
+    --border-color: #330000;
+    --border-glow: rgba(255, 0, 64, 0.5);
+    --shadow-glow: 0 0 10px rgba(255, 0, 64, 0.4), 0 0 20px rgba(255, 0, 64, 0.2);
+    --shadow-lg: 0 0 30px rgba(255, 0, 64, 0.3);
 }
 
 body {
     font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
     background: var(--bg-darker);
     background-image: 
-        radial-gradient(circle at 20% 50%, rgba(0, 255, 65, 0.03) 0%, transparent 50%),
-        radial-gradient(circle at 80% 80%, rgba(0, 255, 255, 0.03) 0%, transparent 50%);
+        radial-gradient(circle at 20% 50%, rgba(255, 0, 64, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(255, 102, 0, 0.03) 0%, transparent 50%);
     color: var(--text-primary);
     line-height: 1.6;
     min-height: 100vh;
@@ -47,7 +48,7 @@ body::before {
     height: 100%;
     background: repeating-linear-gradient(
         0deg,
-        rgba(0, 255, 65, 0.03),
+        rgba(255, 0, 64, 0.05),
         rgba(0, 255, 65, 0.03) 1px,
         transparent 1px,
         transparent 2px
@@ -100,12 +101,12 @@ header::before {
 
 header h1 {
     font-size: 2.5em;
-    color: var(--hacker-green);
+    color: var(--hacker-red);
     margin-bottom: 5px;
     text-shadow: 
-        0 0 10px var(--hacker-green),
-        0 0 20px var(--hacker-green),
-        0 0 30px var(--hacker-green);
+        0 0 10px var(--hacker-red),
+        0 0 20px var(--hacker-red),
+        0 0 30px var(--hacker-red);
     letter-spacing: 3px;
     font-weight: bold;
     text-transform: uppercase;
@@ -121,9 +122,9 @@ header h1 {
 }
 
 .subtitle {
-    color: var(--hacker-cyan);
+    color: var(--hacker-orange);
     font-size: 1.1em;
-    text-shadow: 0 0 5px var(--hacker-cyan);
+    text-shadow: 0 0 5px var(--hacker-orange);
     letter-spacing: 2px;
 }
 
@@ -143,7 +144,7 @@ header h1 {
 }
 
 .card:hover {
-    border-color: var(--hacker-green);
+    border-color: var(--hacker-red);
     box-shadow: var(--shadow-lg);
     background: var(--bg-card-hover);
 }
@@ -153,17 +154,17 @@ header h1 {
     position: absolute;
     top: 10px;
     left: 10px;
-    color: var(--hacker-green);
+    color: var(--hacker-red);
     font-size: 1.2em;
     opacity: 0.5;
 }
 
 .card h2 {
     margin-bottom: 20px;
-    color: var(--hacker-cyan);
-    border-bottom: 2px solid var(--hacker-green);
+    color: var(--hacker-orange);
+    border-bottom: 2px solid var(--hacker-red);
     padding-bottom: 10px;
-    text-shadow: 0 0 5px var(--hacker-cyan);
+    text-shadow: 0 0 5px var(--hacker-orange);
     letter-spacing: 1px;
     font-weight: bold;
 }
@@ -182,15 +183,15 @@ header h1 {
     border: 1px solid var(--border-color);
     border-radius: 0;
     font-size: 1em;
-    color: var(--hacker-green);
+    color: var(--hacker-red);
     font-family: 'Courier New', monospace;
     transition: all 0.3s;
 }
 
 .input-group input:focus {
     outline: none;
-    border-color: var(--hacker-green);
-    box-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+    border-color: var(--hacker-red);
+    box-shadow: 0 0 10px rgba(255, 0, 64, 0.5);
     background: var(--bg-card);
 }
 
@@ -231,29 +232,29 @@ button:hover::before {
 
 .btn-primary {
     background-color: transparent;
-    color: var(--hacker-green);
-    border-color: var(--hacker-green);
-    box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+    color: var(--hacker-red);
+    border-color: var(--hacker-red);
+    box-shadow: 0 0 10px rgba(255, 0, 64, 0.3);
 }
 
 .btn-primary:hover {
-    background-color: rgba(0, 255, 65, 0.1);
-    box-shadow: 0 0 20px rgba(0, 255, 65, 0.6);
-    text-shadow: 0 0 10px var(--hacker-green);
+    background-color: rgba(255, 0, 64, 0.1);
+    box-shadow: 0 0 20px rgba(255, 0, 64, 0.6);
+    text-shadow: 0 0 10px var(--hacker-red);
     transform: translateY(-2px);
 }
 
 .btn-secondary {
     background-color: transparent;
-    color: var(--hacker-cyan);
-    border-color: var(--hacker-cyan);
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+    color: var(--hacker-orange);
+    border-color: var(--hacker-orange);
+    box-shadow: 0 0 10px rgba(255, 102, 0, 0.3);
 }
 
 .btn-secondary:hover {
-    background-color: rgba(0, 255, 255, 0.1);
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
-    text-shadow: 0 0 10px var(--hacker-cyan);
+    background-color: rgba(255, 102, 0, 0.1);
+    box-shadow: 0 0 20px rgba(255, 102, 0, 0.6);
+    text-shadow: 0 0 10px var(--hacker-orange);
 }
 
 .btn-danger {
@@ -291,14 +292,14 @@ button:hover::before {
 }
 
 .tab-btn.active {
-    color: var(--hacker-green);
-    border-bottom-color: var(--hacker-green);
-    text-shadow: 0 0 5px var(--hacker-green);
+    color: var(--hacker-red);
+    border-bottom-color: var(--hacker-red);
+    text-shadow: 0 0 5px var(--hacker-red);
 }
 
 .tab-btn:hover {
-    color: var(--hacker-cyan);
-    text-shadow: 0 0 5px var(--hacker-cyan);
+    color: var(--hacker-orange);
+    text-shadow: 0 0 5px var(--hacker-orange);
 }
 
 /* Forms */
@@ -314,7 +315,7 @@ button:hover::before {
     display: block;
     margin-bottom: 5px;
     font-weight: bold;
-    color: var(--hacker-cyan);
+    color: var(--hacker-orange);
     text-transform: uppercase;
     font-size: 0.9em;
     letter-spacing: 1px;
@@ -328,7 +329,7 @@ button:hover::before {
     border: 1px solid var(--border-color);
     border-radius: 0;
     font-size: 1em;
-    color: var(--hacker-green);
+    color: var(--hacker-red);
     font-family: 'Courier New', monospace;
     transition: all 0.3s;
 }
@@ -336,14 +337,14 @@ button:hover::before {
 .form-group input[type="text"]:focus,
 .form-group input[type="number"]:focus {
     outline: none;
-    border-color: var(--hacker-green);
-    box-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+    border-color: var(--hacker-red);
+    box-shadow: 0 0 10px rgba(255, 0, 64, 0.5);
     background: var(--bg-card);
 }
 
 .form-group input[type="checkbox"] {
     margin-right: 8px;
-    accent-color: var(--hacker-green);
+    accent-color: var(--hacker-red);
 }
 
 /* Status Messages */
@@ -357,9 +358,9 @@ button:hover::before {
 }
 
 .status-message.success {
-    background-color: rgba(0, 255, 65, 0.1);
-    color: var(--hacker-green);
-    border-color: var(--hacker-green);
+    background-color: rgba(255, 0, 64, 0.1);
+    color: var(--hacker-red);
+    border-color: var(--hacker-red);
     box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
 }
 
@@ -371,10 +372,10 @@ button:hover::before {
 }
 
 .status-message.info {
-    background-color: rgba(0, 255, 255, 0.1);
-    color: var(--hacker-cyan);
-    border-color: var(--hacker-cyan);
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
+    background-color: rgba(255, 102, 0, 0.1);
+    color: var(--hacker-orange);
+    border-color: var(--hacker-orange);
+    box-shadow: 0 0 10px rgba(255, 102, 0, 0.2);
 }
 
 /* Progress Bar */
@@ -390,9 +391,9 @@ button:hover::before {
 
 .progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--hacker-green), var(--hacker-cyan));
+    background: linear-gradient(90deg, var(--hacker-red), var(--hacker-orange));
     animation: progress 2s infinite;
-    box-shadow: 0 0 10px var(--hacker-green);
+    box-shadow: 0 0 10px var(--hacker-red);
 }
 
 @keyframes progress {
@@ -411,9 +412,9 @@ button:hover::before {
     padding: 15px;
     background: var(--bg-darker);
     border-radius: 0;
-    border-left: 4px solid var(--hacker-green);
+    border-left: 4px solid var(--hacker-red);
     border: 1px solid var(--border-color);
-    border-left: 4px solid var(--hacker-green);
+    border-left: 4px solid var(--hacker-red);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -421,19 +422,19 @@ button:hover::before {
 }
 
 .service-item:hover {
-    border-color: var(--hacker-green);
+    border-color: var(--hacker-red);
     box-shadow: 0 0 15px rgba(0, 255, 65, 0.3);
     background: var(--bg-card);
 }
 
 .service-item .service-info {
     flex: 1;
-    color: var(--hacker-cyan);
+    color: var(--hacker-orange);
     font-family: 'Courier New', monospace;
 }
 
 .service-item .service-info strong {
-    color: var(--hacker-green);
+    color: var(--hacker-red);
 }
 
 /* Tunnels List */
@@ -452,9 +453,9 @@ button:hover::before {
     padding: 20px;
     background: var(--bg-darker);
     border-radius: 0;
-    border-left: 4px solid var(--hacker-green);
+    border-left: 4px solid var(--hacker-red);
     border: 1px solid var(--border-color);
-    border-left: 4px solid var(--hacker-green);
+    border-left: 4px solid var(--hacker-red);
     transition: all 0.3s;
     position: relative;
 }
@@ -465,7 +466,7 @@ button:hover::before {
     top: 5px;
     right: 10px;
     font-size: 0.7em;
-    color: var(--hacker-green);
+    color: var(--hacker-red);
     opacity: 0.5;
     font-family: 'Courier New', monospace;
 }
@@ -473,7 +474,7 @@ button:hover::before {
 .tunnel-item:hover {
     transform: translateX(5px);
     box-shadow: 0 0 20px rgba(0, 255, 65, 0.4);
-    border-color: var(--hacker-green);
+    border-color: var(--hacker-red);
     background: var(--bg-card);
 }
 
@@ -495,7 +496,7 @@ button:hover::before {
 }
 
 .tunnel-header h3 {
-    color: var(--hacker-cyan);
+    color: var(--hacker-orange);
 }
 
 .tunnel-badge {
@@ -526,8 +527,8 @@ button:hover::before {
 
 .badge-active {
     background-color: transparent;
-    color: var(--hacker-green);
-    border-color: var(--hacker-green);
+    color: var(--hacker-red);
+    border-color: var(--hacker-red);
     box-shadow: 0 0 5px rgba(0, 255, 65, 0.3);
 }
 
@@ -547,12 +548,12 @@ button:hover::before {
 
 .tunnel-detail-item {
     font-size: 0.9em;
-    color: var(--hacker-cyan);
+    color: var(--hacker-orange);
     font-family: 'Courier New', monospace;
 }
 
 .tunnel-detail-item strong {
-    color: var(--hacker-green);
+    color: var(--hacker-red);
 }
 
 .tunnel-actions-item {
@@ -584,7 +585,7 @@ button:hover::before {
     background-color: var(--bg-card);
     margin: 5% auto;
     padding: 30px;
-    border: 1px solid var(--hacker-green);
+    border: 1px solid var(--hacker-red);
     border-radius: 0;
     width: 90%;
     max-width: 600px;
@@ -599,7 +600,7 @@ button:hover::before {
     left: 0;
     right: 0;
     bottom: 0;
-    border: 1px solid var(--hacker-green);
+    border: 1px solid var(--hacker-red);
     box-shadow: 
         inset 0 0 20px rgba(0, 255, 65, 0.2),
         0 0 30px rgba(0, 255, 65, 0.3);
@@ -621,19 +622,19 @@ button:hover::before {
 }
 
 .close:hover {
-    color: var(--hacker-green);
-    text-shadow: 0 0 10px var(--hacker-green);
+    color: var(--hacker-red);
+    text-shadow: 0 0 10px var(--hacker-red);
     transform: rotate(90deg);
 }
 
 #modalBody {
     margin-top: 20px;
-    color: var(--hacker-cyan);
+    color: var(--hacker-orange);
 }
 
 .log-viewer {
     background: var(--bg-darker);
-    color: var(--hacker-green);
+    color: var(--hacker-red);
     padding: 15px;
     border-radius: 0;
     border: 1px solid var(--border-color);
@@ -653,7 +654,7 @@ button:hover::before {
 }
 
 .log-entry:hover {
-    border-left-color: var(--hacker-green);
+    border-left-color: var(--hacker-red);
     background: rgba(0, 255, 65, 0.05);
 }
 
@@ -674,21 +675,21 @@ button:hover::before {
 }
 
 .metric-item:hover {
-    border-color: var(--hacker-green);
+    border-color: var(--hacker-red);
     box-shadow: 0 0 15px rgba(0, 255, 65, 0.3);
 }
 
 .metric-value {
     font-size: 2em;
     font-weight: bold;
-    color: var(--hacker-green);
-    text-shadow: 0 0 10px var(--hacker-green);
+    color: var(--hacker-red);
+    text-shadow: 0 0 10px var(--hacker-red);
     font-family: 'Courier New', monospace;
 }
 
 .metric-label {
     font-size: 0.9em;
-    color: var(--hacker-cyan);
+    color: var(--hacker-orange);
     margin-top: 5px;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -701,8 +702,8 @@ button:hover::before {
     right: 20px;
     padding: 15px 20px;
     background-color: var(--bg-card);
-    color: var(--hacker-green);
-    border: 1px solid var(--hacker-green);
+    color: var(--hacker-red);
+    border: 1px solid var(--hacker-red);
     border-radius: 0;
     box-shadow: var(--shadow-lg);
     display: none;
@@ -719,9 +720,9 @@ button:hover::before {
 }
 
 .toast.success {
-    border-color: var(--hacker-green);
-    box-shadow: 0 0 20px rgba(0, 255, 65, 0.5);
-    color: var(--hacker-green);
+    border-color: var(--hacker-red);
+    box-shadow: 0 0 20px rgba(255, 0, 64, 0.5);
+    color: var(--hacker-red);
 }
 
 .toast.error {
@@ -751,13 +752,13 @@ button:hover::before {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--hacker-green);
-    box-shadow: 0 0 10px var(--hacker-green);
+    background: var(--hacker-red);
+    box-shadow: 0 0 10px var(--hacker-red);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--hacker-cyan);
-    box-shadow: 0 0 10px var(--hacker-cyan);
+    background: var(--hacker-orange);
+    box-shadow: 0 0 10px var(--hacker-orange);
 }
 
 /* Responsive */
@@ -788,5 +789,5 @@ button:hover::before {
 .card h2::after {
     content: '_';
     animation: blink 1s infinite;
-    color: var(--hacker-green);
+    color: var(--hacker-red);
 }

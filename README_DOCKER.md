@@ -1,6 +1,14 @@
 # Docker Setup for MudaleTunnel
 
-This guide explains how to run MudaleTunnel using Docker and access SSH tunnels from your host machine.
+This guide explains how to run MudaleTunnel using Docker with `uv` package management and access SSH tunnels from your host machine.
+
+## What's New: `uv` Support
+
+MudaleTunnel now uses **`uv`** (modern Python package manager) in Docker for:
+- ⚡ **Faster dependency installation**
+- 🔒 **Reproducible builds** with `uv.lock`
+- 📦 **Better dependency resolution**
+- 🚀 **Improved build performance**
 
 ## Important: Docker Networking for SSH Tunnels
 
@@ -59,8 +67,9 @@ docker run -d \
 
 ## Prerequisites
 
-- Docker installed on your system
-- Docker Compose (optional, for easier management)
+- **Docker** installed on your system (Docker 20.10+ recommended)
+- **Docker Compose** (optional, for easier management)
+- **SSH keys** configured (if using SSH key authentication)
 
 ## Quick Start
 
@@ -271,3 +280,29 @@ Or with docker-compose:
 docker-compose build
 docker-compose up -d
 ```
+
+## How `uv` Works in Docker
+
+The Dockerfile uses a multi-stage approach:
+
+1. **Base Image:** Python 3.11-slim
+2. **Install `uv`:** Copies `uv` binary from official image
+3. **Install Dependencies:** Uses `uv sync --frozen` with `uv.lock` for reproducible builds
+4. **Run Application:** Uses `uv run` to execute with the correct environment
+
+**Benefits:**
+- Faster builds (parallel dependency resolution)
+- Locked dependencies (reproducible builds)
+- Better caching (layer optimization)
+- Smaller images (no pip cache)
+
+## Troubleshooting Docker Build
+
+**Issue: "uv.lock not found"**
+- **Solution:** Run `uv lock` locally first, or the build will generate it
+
+**Issue: "uv sync failed"**
+- **Solution:** Ensure `pyproject.toml` and `uv.lock` are in sync. Run `uv lock` to update.
+
+**Issue: "Permission denied"**
+- **Solution:** Ensure Docker has proper permissions. On Linux, you may need to add your user to the docker group.

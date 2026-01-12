@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MUDALE_TUNNEL v2.0 | SSH Tunnel Management System</title>
+    <title>MUDALE_TUNNEL v2.0 | Red Team SSH Tunnel Management</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="container">
         <header>
             <h1>MUDALE_TUNNEL v2.0</h1>
-            <p class="subtitle">[SSH_TUNNEL_MANAGEMENT_SYSTEM]</p>
-            <p class="subtitle" style="font-size: 0.9em; margin-top: 5px;">[STATUS: ONLINE] [MODE: ACTIVE]</p>
+            <p class="subtitle">[RED_TEAM_SSH_TUNNEL_MANAGEMENT]</p>
+            <p class="subtitle" style="font-size: 0.9em; margin-top: 5px;">[STATUS: ONLINE] [MODE: ACTIVE] [THEME: RED_BLACK]</p>
         </header>
 
         <div class="main-content">
@@ -21,6 +21,14 @@
                 <div class="scan-section">
                     <div class="input-group">
                         <input type="text" id="scanTarget" placeholder="Enter target IP or domain (e.g., 192.168.1.1)" />
+                        <select id="scanType" style="padding: 10px; background: #1a1a1a; color: #00ff41; border: 1px solid #00ff41; border-radius: 4px;">
+                            <option value="quick">Quick Scan (Top 100 ports)</option>
+                            <option value="full" selected>Full Scan (All ports + Service)</option>
+                            <option value="service">Service Detection + Scripts</option>
+                            <option value="stealth">Stealth Scan (SYN, slow)</option>
+                            <option value="udp">UDP Scan</option>
+                            <option value="intense">Intense Scan (OS detection)</option>
+                        </select>
                         <button id="scanBtn" onclick="startScan()">Scan</button>
                     </div>
                     <div id="scanStatus" class="status-message"></div>
@@ -28,6 +36,12 @@
                         <div class="progress-fill"></div>
                     </div>
                 </div>
+            </section>
+
+            <!-- Scan History Section -->
+            <section class="card" id="scanHistorySection">
+                <h2>[HISTORY] Scan History</h2>
+                <div id="scanHistoryList" class="scan-history"></div>
             </section>
 
             <!-- Services Section -->
@@ -39,9 +53,20 @@
             <!-- Tunnel Creation Section -->
             <section class="card">
                 <h2>[TUNNEL] Create Tunnel</h2>
+                <div style="margin-bottom: 15px; padding: 10px; background: #0a0a0a; border-left: 4px solid var(--hacker-cyan); border-radius: 4px;">
+                    <strong style="color: var(--hacker-cyan);">Attack Techniques:</strong>
+                    <ul style="margin: 10px 0; padding-left: 20px; color: #888; font-size: 0.9em;">
+                        <li><strong>Static (-L):</strong> Direct port forwarding. Use when you have SSH access and can bind ports.</li>
+                        <li><strong>Dynamic (-D):</strong> SOCKS proxy. Use for flexible access to multiple services through one tunnel.</li>
+                        <li><strong>Remote (-R):</strong> Reverse port forwarding. Use when you can SSH out but firewall blocks inbound.</li>
+                        <li><strong>Remote Dynamic (-R port):</strong> Reverse SOCKS proxy. Use for flexible reverse access (OpenSSH 7.6+).</li>
+                    </ul>
+                </div>
                 <div class="tunnel-tabs">
-                    <button class="tab-btn active" onclick="switchTab('static')">Static (Port Forward)</button>
-                    <button class="tab-btn" onclick="switchTab('dynamic')">Dynamic (SOCKS Proxy)</button>
+                    <button class="tab-btn active" onclick="switchTab('static')">Static (-L)</button>
+                    <button class="tab-btn" onclick="switchTab('dynamic')">Dynamic (-D)</button>
+                    <button class="tab-btn" onclick="switchTab('remote')">Remote (-R)</button>
+                    <button class="tab-btn" onclick="switchTab('remote-dynamic')">Remote Dynamic (-R)</button>
                 </div>
 
                 <!-- Static Tunnel Form -->
@@ -97,6 +122,74 @@
                     </div>
                     <button onclick="createDynamicTunnel()" class="btn-primary">Create Dynamic Tunnel</button>
                 </div>
+
+                <!-- Remote Tunnel Form -->
+                <div id="remoteForm" class="tunnel-form" style="display: none;">
+                    <div style="padding: 10px; background: #1a1a1a; border-left: 4px solid var(--hacker-yellow); margin-bottom: 15px; border-radius: 4px;">
+                        <strong style="color: var(--hacker-yellow);">Use Case:</strong> When you can SSH out but firewall blocks inbound connections. The listening port is bound on the SSH server (attacker machine).
+                    </div>
+                    <div class="form-group">
+                        <label>SSH Username (on attacker machine):</label>
+                        <input type="text" id="remoteSshUser" placeholder="kali" />
+                    </div>
+                    <div class="form-group">
+                        <label>SSH Host (attacker IP):</label>
+                        <input type="text" id="remoteSshHost" placeholder="192.168.118.4" />
+                    </div>
+                    <div class="form-group">
+                        <label>Remote Bind Port (on attacker machine):</label>
+                        <input type="number" id="remoteBindPort" placeholder="2345" />
+                    </div>
+                    <div class="form-group">
+                        <label>Bind Address (on attacker machine):</label>
+                        <input type="text" id="remoteBindAddress" placeholder="127.0.0.1" value="127.0.0.1" />
+                    </div>
+                    <div class="form-group">
+                        <label>Target Host (internal service):</label>
+                        <input type="text" id="remoteTargetHost" placeholder="10.4.50.215" />
+                    </div>
+                    <div class="form-group">
+                        <label>Target Port (internal service):</label>
+                        <input type="number" id="remoteTargetPort" placeholder="5432" />
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="remoteExecute" checked />
+                            Execute tunnel automatically
+                        </label>
+                    </div>
+                    <button onclick="createRemoteTunnel()" class="btn-primary">Create Remote Tunnel</button>
+                </div>
+
+                <!-- Remote Dynamic Tunnel Form -->
+                <div id="remote-dynamicForm" class="tunnel-form" style="display: none;">
+                    <div style="padding: 10px; background: #1a1a1a; border-left: 4px solid var(--hacker-purple); margin-bottom: 15px; border-radius: 4px;">
+                        <strong style="color: var(--hacker-purple);">Use Case:</strong> When you can SSH out and need flexible access to multiple internal services. Creates a SOCKS proxy on the attacker machine. Requires OpenSSH 7.6+ client.
+                    </div>
+                    <div class="form-group">
+                        <label>SSH Username (on attacker machine):</label>
+                        <input type="text" id="remoteDynamicSshUser" placeholder="kali" />
+                    </div>
+                    <div class="form-group">
+                        <label>SSH Host (attacker IP):</label>
+                        <input type="text" id="remoteDynamicSshHost" placeholder="192.168.118.4" />
+                    </div>
+                    <div class="form-group">
+                        <label>Remote SOCKS Port (on attacker machine):</label>
+                        <input type="number" id="remoteDynamicSocksPort" placeholder="9998" />
+                    </div>
+                    <div class="form-group">
+                        <label>Bind Address (on attacker machine):</label>
+                        <input type="text" id="remoteDynamicBindAddress" placeholder="127.0.0.1" value="127.0.0.1" />
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="remoteDynamicExecute" checked />
+                            Execute tunnel automatically
+                        </label>
+                    </div>
+                    <button onclick="createRemoteDynamicTunnel()" class="btn-primary">Create Remote Dynamic Tunnel</button>
+                </div>
             </section>
 
             <!-- Active Tunnels Section -->
@@ -107,6 +200,55 @@
                     <button onclick="stopAllTunnels()" class="btn-danger">Stop All</button>
                 </div>
                 <div id="tunnelsList"></div>
+            </section>
+
+            <!-- Proxychains Configuration Section -->
+            <section class="card">
+                <h2>[PROXYCHAINS] SOCKS Proxy Configuration</h2>
+                <div style="padding: 15px; background: #1a0000; border-left: 4px solid var(--hacker-red); border-radius: 4px; margin-bottom: 15px;">
+                    <strong style="color: var(--hacker-red);">What is Proxychains?</strong>
+                    <p style="color: #888; margin-top: 10px; font-size: 0.9em; line-height: 1.6;">
+                        Proxychains forces network traffic from tools (like nmap, smbclient, etc.) to go through a SOCKS proxy.
+                        This is essential when using dynamic SSH tunnels (-D) or remote dynamic tunnels (-R port).
+                        <br><br>
+                        <strong>How it works:</strong> Proxychains uses LD_PRELOAD to hook into network functions and route all traffic through your configured proxy.
+                        <br><br>
+                        <strong>Usage:</strong> After configuring, use <code style="color: var(--hacker-orange);">proxychains &lt;command&gt;</code> to route any tool through your SOCKS proxy.
+                    </p>
+                </div>
+                <div class="form-group">
+                    <label>Proxy Type:</label>
+                    <select id="proxyType" style="padding: 10px; background: #0a0000; color: var(--hacker-red); border: 1px solid var(--hacker-red); border-radius: 4px; width: 100%;">
+                        <option value="socks5" selected>SOCKS5 (Recommended)</option>
+                        <option value="socks4">SOCKS4</option>
+                        <option value="http">HTTP</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Proxy Host (IP or hostname):</label>
+                    <input type="text" id="proxyHost" placeholder="127.0.0.1 or 192.168.1.100" />
+                </div>
+                <div class="form-group">
+                    <label>Proxy Port:</label>
+                    <input type="number" id="proxyPort" placeholder="1080, 9999, etc." />
+                </div>
+                <div class="form-group">
+                    <label>Chain Type:</label>
+                    <select id="chainType" style="padding: 10px; background: #0a0000; color: var(--hacker-red); border: 1px solid var(--hacker-red); border-radius: 4px; width: 100%;">
+                        <option value="strict_chain" selected>Strict Chain (All proxies in order)</option>
+                        <option value="dynamic_chain">Dynamic Chain (Random from list)</option>
+                        <option value="random_chain">Random Chain</option>
+                    </select>
+                </div>
+                <button onclick="generateProxychainsConfig()" class="btn-primary">Generate Proxychains Config</button>
+                <div id="proxychainsOutput" style="margin-top: 20px; display: none;">
+                    <div style="background: #0a0000; padding: 15px; border-radius: 4px; border: 1px solid var(--hacker-red);">
+                        <strong style="color: var(--hacker-red);">Configuration:</strong>
+                        <pre id="proxychainsConfig" style="background: #000; color: var(--hacker-red); padding: 10px; border-radius: 4px; overflow-x: auto; margin-top: 10px; border: 1px solid var(--hacker-red); font-family: 'Courier New', monospace;"></pre>
+                        <div id="proxychainsInstructions" style="margin-top: 15px; color: #888; font-size: 0.9em;"></div>
+                        <button onclick="copyProxychainsConfig()" class="btn-secondary" style="margin-top: 10px;">Copy Config</button>
+                    </div>
+                </div>
             </section>
         </div>
     </div>

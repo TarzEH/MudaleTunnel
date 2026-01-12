@@ -54,23 +54,36 @@ function handleWebSocketMessage(data) {
 function switchTab(tab) {
     const staticForm = document.getElementById('staticForm');
     const dynamicForm = document.getElementById('dynamicForm');
+    const remoteForm = document.getElementById('remoteForm');
+    const remoteDynamicForm = document.getElementById('remote-dynamicForm');
     const tabs = document.querySelectorAll('.tab-btn');
     
     tabs.forEach(t => t.classList.remove('active'));
     event.target.classList.add('active');
     
+    // Hide all forms
+    staticForm.style.display = 'none';
+    dynamicForm.style.display = 'none';
+    remoteForm.style.display = 'none';
+    remoteDynamicForm.style.display = 'none';
+    
+    // Show selected form
     if (tab === 'static') {
         staticForm.style.display = 'block';
-        dynamicForm.style.display = 'none';
-    } else {
-        staticForm.style.display = 'none';
+    } else if (tab === 'dynamic') {
         dynamicForm.style.display = 'block';
+    } else if (tab === 'remote') {
+        remoteForm.style.display = 'block';
+    } else if (tab === 'remote-dynamic') {
+        remoteDynamicForm.style.display = 'block';
     }
 }
 
 // Start nmap scan
 async function startScan() {
     const target = document.getElementById('scanTarget').value.trim();
+    const scanType = document.getElementById('scanType').value;
+    
     if (!target) {
         showStatus('error', 'Please enter a target');
         return;
@@ -118,10 +131,12 @@ function pollScanStatus(scanId) {
                 document.getElementById('scanProgress').style.display = 'none';
                 showStatus('success', 'Scan completed!');
                 displayServices(data.services || []);
+                loadScanHistory(); // Refresh scan history
             } else if (data.status === 'failed') {
                 clearInterval(scanInterval);
                 document.getElementById('scanProgress').style.display = 'none';
                 showStatus('error', `Scan failed: ${data.error || 'Unknown error'}`);
+                loadScanHistory(); // Refresh scan history
             } else {
                 showStatus('info', data.progress || 'Scanning...');
             }
@@ -262,6 +277,94 @@ async function createDynamicTunnel() {
     }
 }
 
+// Create remote tunnel
+async function createRemoteTunnel() {
+    const sshUser = document.getElementById('remoteSshUser').value.trim();
+    const sshHost = document.getElementById('remoteSshHost').value.trim();
+    const remoteBindPort = parseInt(document.getElementById('remoteBindPort').value);
+    const bindAddress = document.getElementById('remoteBindAddress').value.trim() || '127.0.0.1';
+    const targetHost = document.getElementById('remoteTargetHost').value.trim();
+    const targetPort = parseInt(document.getElementById('remoteTargetPort').value);
+    const execute = document.getElementById('remoteExecute').checked;
+    
+    if (!sshUser || !sshHost || !remoteBindPort || !targetHost || !targetPort) {
+        showToast('Please fill all required fields', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/tunnels/remote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ssh_user: sshUser,
+                ssh_host: sshHost,
+                remote_bind_port: remoteBindPort,
+                target_host: targetHost,
+                target_port: targetPort,
+                bind_address: bindAddress,
+                execute: execute
+            })
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            showToast('Remote tunnel created successfully!', 'success');
+            if (!execute) {
+                showToast(`Command: ${data.command}`, 'info');
+            }
+            refreshTunnels();
+            document.getElementById('remoteForm').reset();
+        } else {
+            showToast(data.detail || 'Failed to create tunnel', 'error');
+        }
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+// Create remote dynamic tunnel
+async function createRemoteDynamicTunnel() {
+    const sshUser = document.getElementById('remoteDynamicSshUser').value.trim();
+    const sshHost = document.getElementById('remoteDynamicSshHost').value.trim();
+    const remoteSocksPort = parseInt(document.getElementById('remoteDynamicSocksPort').value);
+    const bindAddress = document.getElementById('remoteDynamicBindAddress').value.trim() || '127.0.0.1';
+    const execute = document.getElementById('remoteDynamicExecute').checked;
+    
+    if (!sshUser || !sshHost || !remoteSocksPort) {
+        showToast('Please fill all required fields', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/tunnels/remote-dynamic', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ssh_user: sshUser,
+                ssh_host: sshHost,
+                remote_socks_port: remoteSocksPort,
+                bind_address: bindAddress,
+                execute: execute
+            })
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            showToast('Remote dynamic tunnel created successfully!', 'success');
+            if (!execute) {
+                showToast(`Command: ${data.command}`, 'info');
+            }
+            refreshTunnels();
+            document.getElementById('remote-dynamicForm').reset();
+        } else {
+            showToast(data.detail || 'Failed to create tunnel', 'error');
+        }
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
 // Refresh tunnels list
 async function refreshTunnels() {
     try {
@@ -284,12 +387,21 @@ function displayTunnels(tunnels) {
     
     tunnelsList.innerHTML = tunnels.map(tunnel => {
         const statusClass = tunnel.status === 'active' ? 'active' : 'stopped';
-        const badgeClass = tunnel.type === 'static' ? 'badge-static' : 'badge-dynamic';
+        const badgeClass = tunnel.type === 'static' ? 'badge-static' : 
+                          tunnel.type === 'dynamic' ? 'badge-dynamic' :
+                          tunnel.type === 'remote' ? 'badge-remote' : 'badge-remote-dynamic';
         const statusBadgeClass = tunnel.status === 'active' ? 'badge-active' : 'badge-stopped';
         
-        const remoteInfo = tunnel.type === 'static' 
-            ? `${tunnel.remote_host}:${tunnel.remote_port}`
-            : 'SOCKS Proxy';
+        let remoteInfo = '';
+        if (tunnel.type === 'static') {
+            remoteInfo = `${tunnel.remote_host}:${tunnel.remote_port}`;
+        } else if (tunnel.type === 'dynamic') {
+            remoteInfo = 'SOCKS Proxy';
+        } else if (tunnel.type === 'remote') {
+            remoteInfo = `${tunnel.bind_address}:${tunnel.remote_bind_port} -> ${tunnel.target_host}:${tunnel.target_port}`;
+        } else if (tunnel.type === 'remote_dynamic') {
+            remoteInfo = `Remote SOCKS Proxy (${tunnel.bind_address}:${tunnel.remote_socks_port})`;
+        }
         
         return `
             <div class="tunnel-item ${statusClass}">
@@ -301,9 +413,24 @@ function displayTunnels(tunnels) {
                     <span style="font-size: 0.9em; color: #64748b;">ID: ${tunnel.id.substring(0, 8)}</span>
                 </div>
                 <div class="tunnel-details">
-                    <div class="tunnel-detail-item">
-                        <strong>Local Port:</strong> ${tunnel.local_port}
-                    </div>
+                    ${tunnel.type === 'static' || tunnel.type === 'dynamic' ? `
+                        <div class="tunnel-detail-item">
+                            <strong>Local Port:</strong> ${tunnel.local_port}
+                        </div>
+                    ` : ''}
+                    ${tunnel.type === 'remote' ? `
+                        <div class="tunnel-detail-item">
+                            <strong>Remote Bind:</strong> ${tunnel.bind_address}:${tunnel.remote_bind_port}
+                        </div>
+                        <div class="tunnel-detail-item">
+                            <strong>Target:</strong> ${tunnel.target_host}:${tunnel.target_port}
+                        </div>
+                    ` : ''}
+                    ${tunnel.type === 'remote_dynamic' ? `
+                        <div class="tunnel-detail-item">
+                            <strong>Remote SOCKS Port:</strong> ${tunnel.bind_address}:${tunnel.remote_socks_port}
+                        </div>
+                    ` : ''}
                     <div class="tunnel-detail-item">
                         <strong>Remote:</strong> ${remoteInfo}
                     </div>
@@ -377,15 +504,33 @@ async function viewTunnelDetails(tunnelId) {
         const tunnel = await response.json();
         
         const modalBody = document.getElementById('modalBody');
-        modalBody.innerHTML = `
+        let detailsHtml = `
             <div class="tunnel-details">
                 <div><strong>Type:</strong> ${tunnel.type}</div>
                 <div><strong>Status:</strong> ${tunnel.status}</div>
-                <div><strong>Local Port:</strong> ${tunnel.local_port}</div>
-                ${tunnel.type === 'static' ? `
+        `;
+        
+        if (tunnel.type === 'static' || tunnel.type === 'dynamic') {
+            detailsHtml += `<div><strong>Local Port:</strong> ${tunnel.local_port}</div>`;
+            if (tunnel.type === 'static') {
+                detailsHtml += `
                     <div><strong>Remote Host:</strong> ${tunnel.remote_host}</div>
                     <div><strong>Remote Port:</strong> ${tunnel.remote_port}</div>
-                ` : ''}
+                `;
+            }
+        } else if (tunnel.type === 'remote') {
+            detailsHtml += `
+                <div><strong>Remote Bind:</strong> ${tunnel.bind_address}:${tunnel.remote_bind_port}</div>
+                <div><strong>Target Host:</strong> ${tunnel.target_host}</div>
+                <div><strong>Target Port:</strong> ${tunnel.target_port}</div>
+            `;
+        } else if (tunnel.type === 'remote_dynamic') {
+            detailsHtml += `
+                <div><strong>Remote SOCKS Port:</strong> ${tunnel.bind_address}:${tunnel.remote_socks_port}</div>
+            `;
+        }
+        
+        detailsHtml += `
                 <div><strong>SSH User:</strong> ${tunnel.ssh_user}</div>
                 <div><strong>SSH Host:</strong> ${tunnel.ssh_host}</div>
                 <div><strong>PID:</strong> ${tunnel.pid || 'N/A'}</div>
@@ -393,9 +538,11 @@ async function viewTunnelDetails(tunnelId) {
             </div>
             <div style="margin-top: 20px;">
                 <strong>Command:</strong>
-                <pre style="background: #f1f5f9; padding: 10px; border-radius: 4px; overflow-x: auto;">${tunnel.command}</pre>
+                <pre style="background: #0a0000; color: var(--hacker-red); padding: 10px; border-radius: 4px; overflow-x: auto; border: 1px solid var(--hacker-red);">${tunnel.command}</pre>
             </div>
         `;
+        
+        modalBody.innerHTML = detailsHtml;
         
         document.getElementById('modalTitle').textContent = 'Tunnel Details';
         document.getElementById('tunnelModal').style.display = 'block';
@@ -507,11 +654,115 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Load scan history
+async function loadScanHistory() {
+    try {
+        const response = await fetch('/api/scans');
+        const data = await response.json();
+        displayScanHistory(data.scans);
+    } catch (error) {
+        console.error('Error loading scan history:', error);
+    }
+}
+
+// Display scan history
+function displayScanHistory(scans) {
+    const historyList = document.getElementById('scanHistoryList');
+    if (!historyList) return;
+    
+    if (scans.length === 0) {
+        historyList.innerHTML = '<p style="color: #666;">No scans yet. Start a scan to see history.</p>';
+        return;
+    }
+    
+    historyList.innerHTML = scans.map(scan => {
+        const statusClass = scan.status === 'completed' ? 'success' : 
+                           scan.status === 'running' ? 'info' : 
+                           scan.status === 'failed' ? 'error' : 'pending';
+        const statusIcon = scan.status === 'completed' ? '✓' : 
+                          scan.status === 'running' ? '⟳' : 
+                          scan.status === 'failed' ? '✗' : '○';
+        
+        return `
+            <div class="scan-history-item" style="padding: 15px; margin: 10px 0; background: #1a0000; border-left: 4px solid var(--hacker-${statusClass === 'success' ? 'red' : statusClass === 'error' ? 'red' : 'orange'}); border-radius: 4px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong style="color: var(--hacker-red);">${statusIcon} ${scan.target}</strong>
+                        <span style="color: var(--hacker-orange); margin-left: 10px;">[${scan.scan_type}]</span>
+                        <div style="color: #888; font-size: 0.9em; margin-top: 5px;">
+                            Status: <span style="color: var(--hacker-${statusClass === 'success' ? 'red' : statusClass === 'error' ? 'red' : 'orange'});">${scan.status}</span>
+                            ${scan.service_count > 0 ? `| Services: ${scan.service_count}` : ''}
+                        </div>
+                    </div>
+                    <div style="color: #666; font-size: 0.85em;">
+                        ${new Date(scan.created_at).toLocaleString()}
+                    </div>
+                </div>
+                ${scan.progress ? `<div style="color: #888; margin-top: 5px; font-size: 0.9em;">${scan.progress}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+// Generate Proxychains configuration
+async function generateProxychainsConfig() {
+    const proxyType = document.getElementById('proxyType').value;
+    const proxyHost = document.getElementById('proxyHost').value.trim();
+    const proxyPort = parseInt(document.getElementById('proxyPort').value);
+    const chainType = document.getElementById('chainType').value;
+    
+    if (!proxyHost || !proxyPort) {
+        showToast('Please enter proxy host and port', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/proxychains/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                proxy_type: proxyType,
+                proxy_host: proxyHost,
+                proxy_port: proxyPort,
+                chain_type: chainType
+            })
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            document.getElementById('proxychainsConfig').textContent = data.config;
+            const instructions = data.instructions;
+            document.getElementById('proxychainsInstructions').innerHTML = `
+                <strong style="color: var(--hacker-orange);">Instructions:</strong><br>
+                <strong>Linux:</strong> ${instructions.linux}<br>
+                <strong>Usage:</strong> <code style="color: var(--hacker-red);">${instructions.usage}</code><br>
+                <strong>Note:</strong> ${instructions.note}
+            `;
+            document.getElementById('proxychainsOutput').style.display = 'block';
+            showToast('Proxychains configuration generated!', 'success');
+        } else {
+            showToast(data.detail || 'Failed to generate config', 'error');
+        }
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+// Copy proxychains config to clipboard
+function copyProxychainsConfig() {
+    const configText = document.getElementById('proxychainsConfig').textContent;
+    navigator.clipboard.writeText(configText).then(() => {
+        showToast('Configuration copied to clipboard!', 'success');
+    }).catch(() => {
+        showToast('Failed to copy to clipboard', 'error');
+    });
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     initWebSocket();
     refreshTunnels();
-    
-    // Auto-refresh tunnels every 5 seconds
+    loadScanHistory();
     setInterval(refreshTunnels, 5000);
+    setInterval(loadScanHistory, 3000); // Refresh scan history every 3 seconds
 });

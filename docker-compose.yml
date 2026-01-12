@@ -16,8 +16,8 @@ services:
       - ~/.ssh:/root/.ssh:ro
     environment:
       - PYTHONUNBUFFERED=1
-    # Run web interface by default
-    command: python main.py web --host 0.0.0.0 --port 8000
+    # Run web interface by default using uv
+    command: uv run python main.py web --host 0.0.0.0 --port 8000
     restart: unless-stopped
     # For CLI mode, override command:
-    # command: python main.py cli
+    # command: uv run python main.py cli

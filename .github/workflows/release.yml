@@ -125,11 +125,16 @@ jobs:
         git tag -a "v${{ steps.version.outputs.VERSION }}" -m "Release v${{ steps.version.outputs.VERSION }}"
         git push origin "v${{ steps.version.outputs.VERSION }}"
 
-    - name: Build Python Package (wheel/sdist)
+    - name: Install uv
+      if: steps.check-tag.outputs.EXISTS != 'true'
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: "latest"
+
+    - name: Build Python Package (wheel/sdist) with uv
       if: steps.check-tag.outputs.EXISTS != 'true'
       run: |
-        pip install build
-        python -m build
+        uv build
         echo "Python packages built:"
         ls -la dist/* || echo "No packages found"
 

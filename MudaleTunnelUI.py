@@ -122,12 +122,18 @@ class MudaleTunnelUI:
         print(table)
 
     def choose_tunnel_mode(self):
-        """Present menu to choose between static and dynamic tunneling."""
-        print("\n[bold cyan]Select tunneling mode:[/bold cyan]")
-        print("1. Static tunneling (Local port forwarding - ssh -L)")
-        print("2. Dynamic tunneling (SOCKS proxy - ssh -D)")
-        print("3. Manage existing tunnels")
-        print("0. Exit")
+        """Present menu to choose between all tunneling modes."""
+        print("\n[bold red]Select tunneling mode:[/bold red]")
+        print("[cyan]1.[/cyan] Static tunneling (Local port forwarding - ssh -L)")
+        print("   └─ Use when: You have SSH access and can bind ports")
+        print("[cyan]2.[/cyan] Dynamic tunneling (SOCKS proxy - ssh -D)")
+        print("   └─ Use when: You need flexible access to multiple services")
+        print("[cyan]3.[/cyan] Remote tunneling (Reverse port forwarding - ssh -R)")
+        print("   └─ Use when: You can SSH out but firewall blocks inbound")
+        print("[cyan]4.[/cyan] Remote dynamic tunneling (Reverse SOCKS - ssh -R port)")
+        print("   └─ Use when: You can SSH out and need flexible reverse access (OpenSSH 7.6+)")
+        print("[cyan]5.[/cyan] Manage existing tunnels")
+        print("[cyan]0.[/cyan] Exit")
         
         while True:
             try:
@@ -139,10 +145,14 @@ class MudaleTunnelUI:
                 elif choice == 2:
                     return "dynamic"
                 elif choice == 3:
+                    return "remote"
+                elif choice == 4:
+                    return "remote_dynamic"
+                elif choice == 5:
                     self.manage_tunnels_menu()
                     return self.choose_tunnel_mode()
                 else:
-                    print("[red]Invalid selection. Please choose 0-3.[/red]")
+                    print("[red]Invalid selection. Please choose 0-5.[/red]")
             except ValueError:
                 print("[red]Invalid input. Please enter a number.[/red]")
     
@@ -181,6 +191,56 @@ class MudaleTunnelUI:
                 print(f"  - Firefox: Settings > Network Settings > Manual proxy > SOCKS Host: 127.0.0.1, Port: {local_port}")
                 print(f"  - curl: curl --socks5 127.0.0.1:{local_port} http://example.com")
                 print(f"  - Environment: export HTTP_PROXY=socks5://127.0.0.1:{local_port}")
+                print(f"\n[yellow]Proxychains Configuration:[/yellow]")
+                print(f"  Add to /etc/proxychains4.conf: socks5 127.0.0.1 {local_port}")
+                print(f"  Usage: proxychains nmap -sT -Pn target")
+            else:
+                print(f"[yellow]SSH Command (not executed):[/yellow]")
+                print(f"[cyan]{ssh_command}[/cyan]")
+            return tunnel_id, ssh_command
+        except ValueError as e:
+            print(f"[red]Error: {e}[/red]")
+            return None, None
+        except Exception as e:
+            print(f"[red]Failed to create tunnel: {e}[/red]")
+            return None, None
+
+    def create_remote_tunnel(self, ssh_user: str, ssh_host: str, remote_bind_port: int, target_host: str, target_port: int, bind_address: str = "127.0.0.1", execute: bool = True):
+        """Create a remote tunnel using TunnelManager."""
+        try:
+            tunnel_id, ssh_command = self.tunnel_manager.create_remote_tunnel(
+                ssh_user, ssh_host, remote_bind_port, target_host, target_port, bind_address, execute
+            )
+            if execute:
+                print(f"[green]✓ Remote tunnel created successfully![/green]")
+                print(f"[cyan]Tunnel ID: {tunnel_id}[/cyan]")
+                print(f"[cyan]Remote bind: {bind_address}:{remote_bind_port} -> Target: {target_host}:{target_port}[/cyan]")
+                print(f"\n[yellow]Access the service on attacker machine:[/yellow]")
+                print(f"  Connect to: {bind_address}:{remote_bind_port}")
+            else:
+                print(f"[yellow]SSH Command (not executed):[/yellow]")
+                print(f"[cyan]{ssh_command}[/cyan]")
+            return tunnel_id, ssh_command
+        except ValueError as e:
+            print(f"[red]Error: {e}[/red]")
+            return None, None
+        except Exception as e:
+            print(f"[red]Failed to create tunnel: {e}[/red]")
+            return None, None
+
+    def create_remote_dynamic_tunnel(self, ssh_user: str, ssh_host: str, remote_socks_port: int, bind_address: str = "127.0.0.1", execute: bool = True):
+        """Create a remote dynamic tunnel using TunnelManager."""
+        try:
+            tunnel_id, ssh_command = self.tunnel_manager.create_remote_dynamic_tunnel(
+                ssh_user, ssh_host, remote_socks_port, bind_address, execute
+            )
+            if execute:
+                print(f"[green]✓ Remote dynamic tunnel (SOCKS proxy) created successfully![/green]")
+                print(f"[cyan]Tunnel ID: {tunnel_id}[/cyan]")
+                print(f"[cyan]SOCKS proxy on attacker machine: {bind_address}:{remote_socks_port}[/cyan]")
+                print(f"\n[yellow]Proxychains Configuration:[/yellow]")
+                print(f"  Add to /etc/proxychains4.conf: socks5 {bind_address} {remote_socks_port}")
+                print(f"  Usage: proxychains nmap -sT -Pn target")
             else:
                 print(f"[yellow]SSH Command (not executed):[/yellow]")
                 print(f"[cyan]{ssh_command}[/cyan]")
@@ -211,13 +271,29 @@ class MudaleTunnelUI:
         for tunnel in tunnels:
             tunnel_id = tunnel.get("id", "N/A")[:8]
             tunnel_type = tunnel.get("type", "N/A")
-            local_port = str(tunnel.get("local_port", "N/A"))
             status = tunnel.get("status", "unknown")
             
+            # Get port info based on tunnel type
+            if tunnel_type == "static" or tunnel_type == "dynamic":
+                local_port = str(tunnel.get("local_port", "N/A"))
+            elif tunnel_type == "remote":
+                local_port = f"{tunnel.get('bind_address', 'N/A')}:{tunnel.get('remote_bind_port', 'N/A')}"
+            elif tunnel_type == "remote_dynamic":
+                local_port = f"{tunnel.get('bind_address', 'N/A')}:{tunnel.get('remote_socks_port', 'N/A')}"
+            else:
+                local_port = "N/A"
+            
+            # Get remote info
             if tunnel_type == "static":
                 remote = f"{tunnel.get('remote_host', 'N/A')}:{tunnel.get('remote_port', 'N/A')}"
-            else:
+            elif tunnel_type == "dynamic":
                 remote = "SOCKS Proxy"
+            elif tunnel_type == "remote":
+                remote = f"{tunnel.get('target_host', 'N/A')}:{tunnel.get('target_port', 'N/A')}"
+            elif tunnel_type == "remote_dynamic":
+                remote = "Remote SOCKS Proxy"
+            else:
+                remote = "Unknown"
             
             pid = str(tunnel.get("pid", "N/A"))
             
