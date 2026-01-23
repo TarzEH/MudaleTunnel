@@ -1,5 +1,6 @@
 # MudaleTunnel v2.0
-![image](https://github.com/user-attachments/assets/69ab63fd-533d-4fb9-b704-1be00d4f6001)
+<img width="1061" height="574" alt="image" src="https://github.com/user-attachments/assets/6d243bda-36a4-44e7-b01e-d10c198f25d6" />
+
 
 ## 🎯 Description
 
