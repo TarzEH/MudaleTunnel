@@ -18,7 +18,7 @@ WORKDIR /app
 # Copy all application files first (needed for package build)
 # uv sync will build the package, so all source files must be present
 COPY pyproject.toml uv.lock* README.md LICENSE ./
-COPY *.py ./
+COPY main.py tunnel_manager.py web_app.py MudaleTunnelUI.py config.py nmap_parser.py ./
 COPY templates/ ./templates/
 COPY static/ ./static/
 

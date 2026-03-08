@@ -15,6 +15,7 @@ from pydantic import BaseModel
 import json
 
 from tunnel_manager import TunnelManager
+from nmap_parser import parse_nmap_services
 import config
 
 app = FastAPI(title="MudaleTunnel Web Interface")
@@ -141,41 +142,8 @@ def run_nmap_scan(target: str, scan_id: str, scan_type: str = "full"):
         scan_tasks[scan_id]["output"] = result.stdout
         scan_tasks[scan_id]["progress"] = "Scan completed"
         
-        # Parse services from nmap output
-        services = []
-        in_port_section = False
-        
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            
-            # Skip header lines and empty lines
-            if not line or "PORT" in line and "STATE" in line and "SERVICE" in line:
-                in_port_section = True
-                continue
-            
-            # Match nmap port output formats:
-            # "22/tcp   open  ssh"
-            # "80/tcp   open  http    Apache httpd 2.4.41"
-            # "443/tcp  open  https"
-            # "22/tcp   open     ssh"
-            if ("/tcp" in line or "/udp" in line) and "open" in line:
-                parts = line.split()
-                if len(parts) >= 3:
-                    # Find the index of "open"
-                    open_idx = next((i for i, p in enumerate(parts) if p == "open"), None)
-                    if open_idx is not None and open_idx > 0:
-                        port = parts[0]  # e.g., "22/tcp"
-                        state = parts[open_idx]  # "open"
-                        # Service name is usually after "open"
-                        service = parts[open_idx + 1] if open_idx + 1 < len(parts) else "unknown"
-                        
-                        # Skip if service is "filtered", "closed", etc.
-                        if service not in ["filtered", "closed", "unfiltered"]:
-                            services.append({
-                                "port": port,
-                                "state": state,
-                                "service": service
-                            })
+        # Parse services from nmap output using shared parser
+        services = parse_nmap_services(result.stdout)
         
         scan_tasks[scan_id]["services"] = services
         scan_tasks[scan_id]["service_count"] = len(services)
@@ -288,143 +256,70 @@ async def get_services():
     return {"services": all_services}
 
 
-@app.post("/api/tunnels/static")
-async def create_static_tunnel(tunnel_request: StaticTunnelRequest):
-    """Create a static SSH tunnel."""
+async def _handle_tunnel_creation(tunnel_type: str, create_func, *args) -> dict:
+    """Shared handler for tunnel creation endpoints."""
     try:
-        tunnel_id, ssh_command = tunnel_manager.create_static_tunnel(
-            tunnel_request.ssh_user,
-            tunnel_request.ssh_host,
-            tunnel_request.target_host,
-            tunnel_request.remote_port,
-            tunnel_request.local_port,
-            tunnel_request.execute
-        )
-        
-        # Broadcast update
+        tunnel_id, ssh_command = create_func(*args)
         await broadcast_tunnel_update({
             "type": "tunnel_created",
             "tunnel_id": tunnel_id,
-            "tunnel_type": "static"
+            "tunnel_type": tunnel_type,
         })
-        
         tunnel_info = tunnel_manager.get_tunnel(tunnel_id)
         return {
             "success": True,
             "tunnel_id": tunnel_id,
             "command": ssh_command,
-            "tunnel": tunnel_info
+            "tunnel": tunnel_info,
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create tunnel: {str(e)}")
+
+
+@app.post("/api/tunnels/static")
+async def create_static_tunnel(tunnel_request: StaticTunnelRequest):
+    """Create a static SSH tunnel."""
+    return await _handle_tunnel_creation(
+        "static", tunnel_manager.create_static_tunnel,
+        tunnel_request.ssh_user, tunnel_request.ssh_host,
+        tunnel_request.target_host, tunnel_request.remote_port,
+        tunnel_request.local_port, tunnel_request.execute,
+    )
 
 
 @app.post("/api/tunnels/dynamic")
 async def create_dynamic_tunnel(tunnel_request: DynamicTunnelRequest):
     """Create a dynamic SSH tunnel (SOCKS proxy)."""
-    try:
-        tunnel_id, ssh_command = tunnel_manager.create_dynamic_tunnel(
-            tunnel_request.ssh_user,
-            tunnel_request.ssh_host,
-            tunnel_request.local_port,
-            tunnel_request.execute
-        )
-        
-        # Broadcast update
-        await broadcast_tunnel_update({
-            "type": "tunnel_created",
-            "tunnel_id": tunnel_id,
-            "tunnel_type": "dynamic"
-        })
-        
-        tunnel_info = tunnel_manager.get_tunnel(tunnel_id)
-        return {
-            "success": True,
-            "tunnel_id": tunnel_id,
-            "command": ssh_command,
-            "tunnel": tunnel_info
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create tunnel: {str(e)}")
+    return await _handle_tunnel_creation(
+        "dynamic", tunnel_manager.create_dynamic_tunnel,
+        tunnel_request.ssh_user, tunnel_request.ssh_host,
+        tunnel_request.local_port, tunnel_request.execute,
+    )
 
 
 @app.post("/api/tunnels/remote")
 async def create_remote_tunnel(tunnel_request: RemoteTunnelRequest):
-    """Create a remote SSH tunnel (reverse port forwarding).
-    
-    Use case: When you can SSH out but can't bind ports on the compromised host.
-    The listening port is bound on the SSH server (attacker machine).
-    """
-    try:
-        tunnel_id, ssh_command = tunnel_manager.create_remote_tunnel(
-            tunnel_request.ssh_user,
-            tunnel_request.ssh_host,
-            tunnel_request.remote_bind_port,
-            tunnel_request.target_host,
-            tunnel_request.target_port,
-            tunnel_request.bind_address,
-            tunnel_request.execute
-        )
-        
-        # Broadcast update
-        await broadcast_tunnel_update({
-            "type": "tunnel_created",
-            "tunnel_id": tunnel_id,
-            "tunnel_type": "remote"
-        })
-        
-        tunnel_info = tunnel_manager.get_tunnel(tunnel_id)
-        return {
-            "success": True,
-            "tunnel_id": tunnel_id,
-            "command": ssh_command,
-            "tunnel": tunnel_info
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create tunnel: {str(e)}")
+    """Create a remote SSH tunnel (reverse port forwarding)."""
+    return await _handle_tunnel_creation(
+        "remote", tunnel_manager.create_remote_tunnel,
+        tunnel_request.ssh_user, tunnel_request.ssh_host,
+        tunnel_request.remote_bind_port, tunnel_request.target_host,
+        tunnel_request.target_port, tunnel_request.bind_address,
+        tunnel_request.execute,
+    )
 
 
 @app.post("/api/tunnels/remote-dynamic")
 async def create_remote_dynamic_tunnel(tunnel_request: RemoteDynamicTunnelRequest):
-    """Create a remote dynamic SSH tunnel (reverse SOCKS proxy).
-    
-    Use case: When you can SSH out but need flexible access to multiple internal services.
-    The SOCKS proxy port is bound on the SSH server (attacker machine).
-    Requires OpenSSH 7.6+ client.
-    """
-    try:
-        tunnel_id, ssh_command = tunnel_manager.create_remote_dynamic_tunnel(
-            tunnel_request.ssh_user,
-            tunnel_request.ssh_host,
-            tunnel_request.remote_socks_port,
-            tunnel_request.bind_address,
-            tunnel_request.execute
-        )
-        
-        # Broadcast update
-        await broadcast_tunnel_update({
-            "type": "tunnel_created",
-            "tunnel_id": tunnel_id,
-            "tunnel_type": "remote_dynamic"
-        })
-        
-        tunnel_info = tunnel_manager.get_tunnel(tunnel_id)
-        return {
-            "success": True,
-            "tunnel_id": tunnel_id,
-            "command": ssh_command,
-            "tunnel": tunnel_info
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create tunnel: {str(e)}")
+    """Create a remote dynamic SSH tunnel (reverse SOCKS proxy)."""
+    return await _handle_tunnel_creation(
+        "remote_dynamic", tunnel_manager.create_remote_dynamic_tunnel,
+        tunnel_request.ssh_user, tunnel_request.ssh_host,
+        tunnel_request.remote_socks_port, tunnel_request.bind_address,
+        tunnel_request.execute,
+    )
 
 
 @app.get("/api/tunnels")
@@ -478,7 +373,6 @@ async def get_tunnel_logs(tunnel_id: str, limit: Optional[int] = None):
     """Get tunnel logs."""
     if limit is None:
         limit = config.DEFAULT_LOG_LIMIT
-    """Get tunnel logs."""
     logs = tunnel_manager.get_tunnel_logs(tunnel_id, limit)
     return {"tunnel_id": tunnel_id, "logs": logs}
 
