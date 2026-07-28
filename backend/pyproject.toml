@@ -48,6 +48,7 @@ ignore = ["S101"]  # assert is fine in tests
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S", "B"]
+"conftest.py" = ["S106"]  # fixture passwords are not credentials
 "**/settings/**" = ["S105", "F403", "F405"]
 
 [tool.pytest.ini_options]
