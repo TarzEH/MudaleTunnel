@@ -78,6 +78,14 @@ RUN mkdir -p /app/var/logs /app/staticfiles \
 
 USER mudale
 
+# Collect the SPA and Django's own assets into STATIC_ROOT for WhiteNoise.
+# Needs a SECRET_KEY to import settings, but nothing here touches the database,
+# so a throwaway value is correct — it is not baked into the running app.
+RUN MUDALE_SECRET_KEY=build-time-only \
+    MUDALE_ALLOWED_HOSTS=localhost \
+    MUDALE_DB_PASSWORD=build-time-only \
+    python manage.py collectstatic --noinput --clear
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

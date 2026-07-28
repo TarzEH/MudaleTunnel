@@ -58,6 +58,9 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Directly after SecurityMiddleware, as WhiteNoise requires. Serves
+    # everything under STATIC_URL from STATIC_ROOT, including the compiled SPA.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -166,6 +169,14 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 _DEFAULT_FRONTEND_DIST = str(BASE_DIR.parent / "frontend" / "dist")
 FRONTEND_DIST = Path(env_str("MUDALE_FRONTEND_DIST", default=_DEFAULT_FRONTEND_DIST))
 STATICFILES_DIRS = [FRONTEND_DIST] if FRONTEND_DIST.is_dir() else []
+
+# Vite already fingerprints its output, so re-hashing gains nothing; compression
+# is the part worth having.
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
+WHITENOISE_MAX_AGE = 31536000
 
 # ── Security (hardened by default; dev.py relaxes what it must) ─────────
 

@@ -19,7 +19,6 @@ if "*" in ALLOWED_HOSTS:  # noqa: F405
 if not DATABASES["default"]["PASSWORD"]:  # noqa: F405
     raise ImproperlyConfigured("MUDALE_DB_PASSWORD must be set in production")
 
-STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"},
-}
+# STORAGES is configured in base.py. Manifest storage is deliberately not used:
+# Vite already fingerprints its own output and does not emit a Django manifest,
+# so ManifestStaticFilesStorage would fail on the SPA's asset references.
