@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mudaletunnel"
+version = "3.0.0.dev0"
+description = "Control plane for network pivoting — manages ligolo-ng and SSH tunnel engines"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+dependencies = [
+    # 5.2 is the current LTS and the newest release DRF + Channels both
+    # support without pre-release pins.
+    "django>=5.2,<6.0",
+    "djangorestframework>=3.15",
+    "django-filter>=24.3",
+    "channels>=4.2",
+    "channels-redis>=4.2",
+    "daphne>=4.1",
+    "psycopg[binary]>=3.2",
+    "redis>=5.2",
+    "python-dotenv>=1.0",
+    "pydantic>=2.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-django>=4.9",
+    "pytest-asyncio>=0.25",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "model-bakery>=1.20",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["mudale", "apps"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = ["**/migrations/**"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "DJ", "S"]
+ignore = ["S101"]  # assert is fine in tests
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S", "B"]
+"**/settings/**" = ["S105", "F403", "F405"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "mudale.settings.test"
+python_files = ["test_*.py", "tests.py"]
+addopts = "-ra --strict-markers"
+testpaths = ["apps", "mudale"]
