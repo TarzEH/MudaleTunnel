@@ -1,27 +1,27 @@
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
-*.egg
-*.egg-info
-dist/
-build/
-.git/
-.gitignore
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.env
-.venv/
-venv/
-env/
-.DS_Store
-*.log
-.coverage
-htmlcov/
+# Build context hygiene: keep local state, caches and secrets out of the image.
+
+.git
+.github
+docs
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+backend/.venv/
+backend/staticfiles/
+backend/var/
 .pytest_cache/
-.cache/
+.ruff_cache/
+
+# Node — the image runs `npm ci` itself; a host-built tree would shadow it with
+# platform-specific binaries.
+frontend/node_modules/
+frontend/dist/
+
+# Never ship these
+.env
+.env.*
+!.env.example
+**/*.pem
+**/*.key
+**/id_rsa*

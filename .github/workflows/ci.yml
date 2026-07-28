@@ -2,91 +2,163 @@ name: CI
 
 on:
   push:
-    branches: [ master, main, develop ]
+    branches: [master, main, v3]
   pull_request:
-    branches: [ master, main, develop ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
-    name: Test on Python ${{ matrix.python-version }}
+  backend:
+    name: Backend
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.9', '3.11']
+
+    # The suite runs against a real PostgreSQL. The engagement scope allowlist is
+    # a Postgres ArrayField and the audit payloads are JSONB, so testing against
+    # SQLite would exercise different code than production runs.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: mudale
+          POSTGRES_USER: mudale
+          POSTGRES_PASSWORD: ci-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mudale"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      MUDALE_SECRET_KEY: ci-only-not-a-secret
+      MUDALE_DB_HOST: 127.0.0.1
+      MUDALE_DB_PASSWORD: ci-password
+      DJANGO_SETTINGS_MODULE: mudale.settings.test
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y nmap openssh-client
+      - name: Install
+        working-directory: backend
+        run: |
+          uv venv
+          uv pip install -e ".[dev]"
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
-      with:
-        version: "latest"
+      - name: Lint
+        working-directory: backend
+        run: uv run ruff check .
 
-    - name: Cache uv packages
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-uv-
+      - name: Migrations are complete
+        working-directory: backend
+        # Catches a model change that was never turned into a migration, which
+        # otherwise only surfaces as a runtime failure after deploy.
+        run: uv run python manage.py makemigrations --check --dry-run
 
-    - name: Install dependencies with uv
-      run: |
-        uv sync --frozen || uv sync
+      - name: Tests
+        working-directory: backend
+        # Includes the ssh integration test, which needs a real sshd —
+        # ubuntu-latest ships one.
+        run: uv run pytest -q
 
-    - name: Check imports
-      run: |
-        uv run python -c "import MudaleTunnelUI; import tunnel_manager; import web_app; import main"
-        echo "✓ All imports successful"
+      - name: Production settings refuse an unsafe configuration
+        working-directory: backend
+        run: |
+          if MUDALE_ALLOWED_HOSTS='*' DJANGO_SETTINGS_MODULE=mudale.settings.prod \
+               uv run python manage.py check 2>&1 | grep -q "may not contain"; then
+            echo "prod settings correctly refused a wildcard ALLOWED_HOSTS"
+          else
+            echo "prod settings accepted a wildcard ALLOWED_HOSTS"
+            exit 1
+          fi
 
-    - name: Test CLI help
-      run: |
-        uv run python main.py --help || uv run python main.py cli --help || echo "Help command check skipped"
-
-    - name: Test web app import
-      run: |
-        uv run python -c "from web_app import app; print('✓ Web app imports successfully')"
-
-  lint:
-    name: Lint Code
+  frontend:
+    name: Dashboard
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-    - name: Check code compilation
-      run: |
-        python -m py_compile main.py MudaleTunnelUI.py tunnel_manager.py web_app.py
-        echo "✓ Code compiles successfully"
+      - name: Install
+        working-directory: frontend
+        run: npm ci
 
-  docker-build:
-    name: Build Docker Image
+      - name: Typecheck
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  image:
+    name: Image
     runs-on: ubuntu-latest
+    # Gated on both suites. v2 published releases off a CI run that only checked
+    # that modules imported, so a build whose every tunnel deadlocked shipped as
+    # a release.
+    needs: [backend, frontend]
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-    - name: Build Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: false
-        tags: mudaletunnel:test
-      continue-on-error: true
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: mudaletunnel:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Runs unprivileged
+        run: |
+          user=$(docker run --rm --entrypoint id mudaletunnel:ci -un)
+          test "$user" = "mudale" || { echo "image runs as $user, expected mudale"; exit 1; }
+
+      - name: Image starts and reports healthy
+        run: |
+          docker network create mudale-ci-net
+          docker run -d --name mudale-ci-db --network mudale-ci-net \
+            -e POSTGRES_DB=mudale -e POSTGRES_USER=mudale -e POSTGRES_PASSWORD=ci-password \
+            postgres:17-alpine
+          docker run -d --name mudale-ci-redis --network mudale-ci-net redis:7-alpine
+
+          for _ in $(seq 1 30); do
+            docker exec mudale-ci-db pg_isready -U mudale >/dev/null 2>&1 && break
+            sleep 2
+          done
+
+          docker run -d --name mudale-ci --network mudale-ci-net \
+            -e MUDALE_SECRET_KEY=ci-only-not-a-secret \
+            -e MUDALE_ALLOWED_HOSTS=localhost,127.0.0.1 \
+            -e MUDALE_DB_HOST=mudale-ci-db \
+            -e MUDALE_DB_PASSWORD=ci-password \
+            -e MUDALE_REDIS_URL=redis://mudale-ci-redis:6379/0 \
+            -e MUDALE_SSL_REDIRECT=false \
+            -p 8000:8000 mudaletunnel:ci
+
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/api/v1/health/ >/dev/null 2>&1; then
+              echo "healthy"
+              docker rm -f mudale-ci mudale-ci-db mudale-ci-redis
+              docker network rm mudale-ci-net
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "container never became healthy"
+          docker logs mudale-ci
+          exit 1

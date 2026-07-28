@@ -86,6 +86,20 @@ services:
   engine:
     <<: *app
     command: ["python", "manage.py", "enginectl"]
+    # The image's default healthcheck probes the HTTP port, which this service
+    # does not serve. Health here means "the daemon is heartbeating", which is
+    # what the dashboard uses to decide whether a control plane is attached.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import django; django.setup();
+          from apps.engine.models import EngineInstance;
+          import sys; sys.exit(0 if EngineInstance.objects.alive().exists() else 1)"
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
     # Read-only mount of the operator's keys, so the ssh adapter can authenticate
     # without this control plane ever storing private key material itself.
     volumes:
