@@ -1,38 +1,87 @@
-# Multi-stage build for MudaleTunnel using uv
-FROM python:3.11-slim as base
+# MudaleTunnel — single image serving both the web tier and the engine daemon.
+#
+# The same image runs two different processes (see docker-compose.yml): daphne
+# for the API and dashboard, and `manage.py enginectl` for the supervisor. They
+# are separate containers because the engine owns long-lived subprocesses and
+# must not be recycled when the web tier is redeployed.
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    nmap \
-    openssh-client \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# ── Stage 1: build the dashboard ────────────────────────────────────────
 
-# Install uv from official image
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-RUN chmod +x /usr/local/bin/uv
+FROM node:22-alpine AS frontend
 
-# Set working directory
+WORKDIR /build
+
+# Copy manifests first so `npm ci` is cached until dependencies actually change.
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci --no-audit --no-fund
+
+COPY frontend/ ./
+RUN npm run build
+
+
+# ── Stage 2: python dependencies ────────────────────────────────────────
+
+FROM python:3.12-slim AS python-deps
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
 WORKDIR /app
 
-# Copy all application files first (needed for package build)
-# uv sync will build the package, so all source files must be present
-COPY pyproject.toml uv.lock* README.md LICENSE ./
-COPY main.py tunnel_manager.py web_app.py MudaleTunnelUI.py config.py nmap_parser.py ./
-COPY templates/ ./templates/
-COPY static/ ./static/
+RUN pip install --no-cache-dir uv
 
-# Install Python dependencies using uv
-# If uv.lock doesn't exist, uv will generate it
-RUN if [ -f uv.lock ]; then \
-        uv sync --frozen --no-dev; \
-    else \
-        uv sync --no-dev; \
-    fi
+COPY backend/pyproject.toml ./
+# Resolve into a self-contained venv that the runtime stage copies wholesale,
+# so no build tooling ends up in the final image.
+RUN uv venv /opt/venv \
+ && uv pip install --python /opt/venv/bin/python -r pyproject.toml
 
-# Expose port for web interface
+
+# ── Stage 3: runtime ────────────────────────────────────────────────────
+
+FROM python:3.12-slim AS runtime
+
+# openssh-client  — the ssh adapter's binary
+# nmap            — the scan adapter's binary
+# iproute2        — route management for tunnel interfaces
+# tini            — a real PID 1, so SIGTERM reaches the daemon and it can stop
+#                   its supervised children cleanly instead of being SIGKILLed
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      openssh-client \
+      nmap \
+      iproute2 \
+      tini \
+      curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# Runs unprivileged. v2's image ran everything as root, which combined with an
+# unauthenticated endpoint and an injectable nmap target meant root-level
+# filesystem access from the network.
+RUN groupadd --gid 10001 mudale \
+ && useradd --uid 10001 --gid mudale --create-home --shell /usr/sbin/nologin mudale
+
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DJANGO_SETTINGS_MODULE=mudale.settings.prod \
+    MUDALE_FRONTEND_DIST=/app/frontend_dist
+
+WORKDIR /app
+
+COPY --from=python-deps /opt/venv /opt/venv
+COPY --chown=mudale:mudale backend/ /app/
+COPY --from=frontend --chown=mudale:mudale /build/dist /app/frontend_dist
+
+RUN mkdir -p /app/var/logs /app/staticfiles \
+ && chown -R mudale:mudale /app/var /app/staticfiles
+
+USER mudale
+
 EXPOSE 8000
 
-# Default command (can be overridden)
-# Use uv run to execute with the correct environment
-CMD ["uv", "run", "python", "main.py", "web", "--host", "0.0.0.0", "--port", "8000"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8000/api/v1/health/ || exit 1
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "mudale.asgi:application"]

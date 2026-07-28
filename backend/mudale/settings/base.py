@@ -101,9 +101,18 @@ DATABASES = {
 
 REDIS_URL = env_str("MUDALE_REDIS_URL", default="redis://127.0.0.1:6379/0")
 
+# RedisPubSubChannelLayer, not the default RedisChannelLayer.
+#
+# What this layer carries is pure fan-out: "tunnel 3 changed, tell every
+# dashboard watching this engagement". The default layer models each consumer as
+# a durable queue and holds a blocking read open against Redis for it, which
+# raises TimeoutError on an idle socket and drops the connection — observed as
+# a "Live" indicator that never delivers an update. Pub/sub has no queue to time
+# out, and losing a message while disconnected is fine here: the dashboard
+# refetches on reconnect.
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "BACKEND": "channels_redis.pubsub.RedisPubSubChannelLayer",
         "CONFIG": {"hosts": [REDIS_URL]},
     }
 }

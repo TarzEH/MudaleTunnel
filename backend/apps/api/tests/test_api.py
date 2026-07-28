@@ -225,6 +225,51 @@ def test_hostile_scan_targets_are_refused(client, engagement, target):
     assert response.json()["code"] in {"invalid_target", "out_of_scope"}
 
 
+def test_actions_are_attributed_to_the_operator_who_took_them(client, engagement, operator):
+    """The audit trail has to say *who*, not just *what*.
+
+    Authentication runs after the audit middleware, so the actor is resolved at
+    write time from the request. Without that, every API- and CLI-driven action
+    is recorded as "system" and the trail cannot attribute anything.
+    """
+    tunnel_id = client.post(
+        reverse("v1:tunnel-list"),
+        {"engagement": engagement.pk, "kind": TunnelKind.SSH_LOCAL, "spec": spec()},
+    ).json()["id"]
+    client.post(reverse("v1:tunnel-stop", args=[tunnel_id]))
+
+    events = AuditEvent.objects.filter(
+        action__in=[AuditAction.TUNNEL_REQUESTED, AuditAction.TUNNEL_STOPPED]
+    )
+    assert events.exists()
+    for event in events:
+        assert event.actor == operator, f"{event.action} was not attributed"
+        assert event.actor_label == str(operator)
+        assert event.actor_label != "system"
+
+
+def test_denials_are_attributed_too(client, engagement, operator):
+    """A blocked attempt is worthless in a review if it does not name the actor."""
+    client.post(
+        reverse("v1:scan-list"),
+        {"engagement": engagement.pk, "target": "8.8.8.8", "profile": "quick"},
+    )
+    denial = AuditEvent.objects.get(action=AuditAction.SCOPE_DENIED)
+    assert denial.actor == operator
+    assert denial.actor_label != "system"
+
+
+def test_engine_actions_remain_attributed_to_system(engagement):
+    """Nothing above should have made the daemon start impersonating a user."""
+    from apps.audit.context import AuditContext, using
+    from apps.audit.services import record
+
+    with using(AuditContext()):
+        event = record(AuditAction.TUNNEL_STARTED, engagement=engagement)
+    assert event.actor is None
+    assert event.actor_label == "system"
+
+
 def test_scope_denial_is_audited_and_visible_in_the_audit_endpoint(client, engagement):
     client.post(
         reverse("v1:scan-list"),

@@ -25,6 +25,25 @@ class AuditContext:
     actor_label: str = SYSTEM_ACTOR_LABEL
     request_id: str = ""
     source_ip: str | None = None
+    #: The in-flight request, when there is one.
+    #:
+    #: Held so the actor can be resolved *at write time* rather than when the
+    #: context is created. Middleware runs before authentication, so
+    #: ``request.user`` is not known yet when the context is installed — without
+    #: this, every API- and CLI-driven action would be attributed to "system"
+    #: and the audit trail could not say who did anything.
+    request: Any | None = None
+
+    def resolved_actor(self) -> tuple[Any | None, str]:
+        """The actor and its label, resolving from the request if needed."""
+        if self.actor is not None:
+            return self.actor, self.actor_label
+
+        user = getattr(self.request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
+            return user, str(user)
+
+        return None, self.actor_label or SYSTEM_ACTOR_LABEL
 
 
 #: Default is None rather than an AuditContext instance: a ContextVar default is

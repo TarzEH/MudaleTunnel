@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-base: #ffffff;
+  --bg-surface: #f4f4f5;
+  --bg-surface-2: #e4e4e7;
+  --border-subtle: #d4d4d8;
+  --border-strong: #a1a1aa;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #71717a;
+  --accent: #0891b2;
+  --status-ok: #22c55e;
+  --status-warn: #f59e0b;
+  --status-error: #ef4444;
+  --status-info: #3b82f6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-base: #09090b;
+    --bg-surface: #18181b;
+    --bg-surface-2: #27272a;
+    --border-subtle: #3f3f46;
+    --border-strong: #52525b;
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+    --accent: #22d3ee;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg-base: #09090b;
+  --bg-surface: #18181b;
+  --bg-surface-2: #27272a;
+  --border-subtle: #3f3f46;
+  --border-strong: #52525b;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --accent: #22d3ee;
+}
+
+:root[data-theme='light'] {
+  --bg-base: #ffffff;
+  --bg-surface: #f4f4f5;
+  --bg-surface-2: #e4e4e7;
+  --border-subtle: #d4d4d8;
+  --border-strong: #a1a1aa;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #71717a;
+  --accent: #0891b2;
+}
+
+* {
+  border-color: var(--border-subtle);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Manually authored alpha-blended tone utilities.
+ * Tailwind's built-in opacity modifier (bg-red-500/10) only works against
+ * color values it can decompose into rgb components; our status colors are
+ * plain CSS custom properties, so we blend them ourselves with color-mix()
+ * and expose them under the same class names the components already use.
+ */
+.border-ok\/40 {
+  border-color: color-mix(in srgb, var(--status-ok) 40%, transparent);
+}
+.border-warn\/40 {
+  border-color: color-mix(in srgb, var(--status-warn) 40%, transparent);
+}
+.border-error\/40 {
+  border-color: color-mix(in srgb, var(--status-error) 40%, transparent);
+}
+.border-info\/40 {
+  border-color: color-mix(in srgb, var(--status-info) 40%, transparent);
+}
+.border-error\/30 {
+  border-color: color-mix(in srgb, var(--status-error) 30%, transparent);
+}
+.bg-error\/10 {
+  background-color: color-mix(in srgb, var(--status-error) 10%, transparent);
+}
+.hover\:bg-error\/10:hover {
+  background-color: color-mix(in srgb, var(--status-error) 10%, transparent);
+}
+
+::selection {
+  background-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* Focus ring using accent color, only for keyboard focus */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Scrollbar - subtle, not themed heavily */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 8px;
+  border: 2px solid var(--bg-surface);
+}
