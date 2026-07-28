@@ -35,15 +35,19 @@ from apps.engine.specs import (
 #: ServerAliveInterval/CountMax — notice a dead peer in ~30s instead of waiting
 #:                    for TCP to time out, so the dashboard reflects reality.
 #: ConnectTimeout   — bound how long a start attempt can hang.
-#: ClearAllForwardings — drop anything the user's ssh_config might add; the
-#:                    control plane's model of a tunnel must be complete.
+#:
+#: Note on what is deliberately *absent*: ``ClearAllForwardings=yes`` looks like
+#: the right way to stop a user's ssh_config from adding forwardings we did not
+#: ask for, but it clears the forwarding we *did* ask for too — ssh then connects
+#: successfully and carries no traffic, with nothing for ExitOnForwardFailure to
+#: catch. Isolation is achieved with ``-F /dev/null`` instead (see below), which
+#: ignores the config file outright. Verified against a real sshd.
 BASE_SSH_OPTIONS: tuple[tuple[str, str], ...] = (
     ("BatchMode", "yes"),
     ("ExitOnForwardFailure", "yes"),
     ("ServerAliveInterval", "10"),
     ("ServerAliveCountMax", "3"),
     ("ConnectTimeout", "10"),
-    ("ClearAllForwardings", "yes"),
     # A tunnel process must never get a shell or a tty.
     ("RequestTTY", "no"),
     ("PermitLocalCommand", "no"),
@@ -130,6 +134,13 @@ class SshAdapter:
             # Deliberately NOT -f: see module docstring.
             "-N",
             "-T",
+            # Ignore the invoking user's ~/.ssh/config entirely. A tunnel's
+            # behaviour must come from its stored spec and nothing else,
+            # otherwise the control plane's model of what a tunnel does is
+            # incomplete and a personal config could silently redirect a
+            # tunnel into a client network.
+            "-F",
+            "/dev/null",
             "-p",
             str(endpoint.port),
         ]
