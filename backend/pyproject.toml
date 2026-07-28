@@ -37,8 +37,11 @@ dev = [
     "model-bakery>=1.20",
 ]
 
+[project.scripts]
+mudale = "mudale_cli.main:main"
+
 [tool.hatch.build.targets.wheel]
-packages = ["mudale", "apps"]
+packages = ["mudale", "apps", "mudale_cli"]
 
 [tool.ruff]
 line-length = 100
@@ -58,4 +61,4 @@ ignore = ["S101"]  # assert is fine in tests
 DJANGO_SETTINGS_MODULE = "mudale.settings.test"
 python_files = ["test_*.py", "tests.py"]
 addopts = "-ra --strict-markers"
-testpaths = ["apps", "mudale"]
+testpaths = ["apps", "mudale", "mudale_cli"]

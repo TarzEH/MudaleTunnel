@@ -72,10 +72,47 @@ def test_never_prompts(adapter):
     assert plan.env["SSH_ASKPASS_REQUIRE"] == "never"
 
 
-def test_inherited_ssh_config_forwards_are_cleared(adapter):
-    """The control plane's model of a tunnel has to be the whole truth."""
+def test_user_ssh_config_is_ignored(adapter):
+    """A tunnel's behaviour must come from its spec and nothing else."""
     argv = argv_for(adapter, SshDynamicForwardSpec(endpoint=ENDPOINT, local_port=1080))
-    assert "ClearAllForwardings=yes" in argv
+    assert argv[argv.index("-F") + 1] == "/dev/null"
+
+
+def test_clear_all_forwardings_is_never_used(adapter):
+    """Regression: it clears the forwarding we asked for, not just inherited ones.
+
+    With it set, ssh authenticates, reports success, listens on nothing, and
+    ExitOnForwardFailure has no failure to catch — so the tunnel shows as active
+    while carrying no traffic. Verified against a real sshd before removing it.
+    """
+    for spec in (
+        SshLocalForwardSpec(
+            endpoint=ENDPOINT, local_port=8080, target_host="10.4.9.5", target_port=443
+        ),
+        SshDynamicForwardSpec(endpoint=ENDPOINT, local_port=1080),
+        SshRemoteForwardSpec(
+            endpoint=ENDPOINT, remote_port=9000, target_host="127.0.0.1", target_port=8000
+        ),
+        SshRemoteDynamicSpec(endpoint=ENDPOINT, remote_port=1080),
+    ):
+        argv = argv_for(adapter, spec)
+        assert not any("ClearAllForwardings" in arg for arg in argv)
+
+
+def test_a_forwarding_flag_is_always_present(adapter):
+    """Whatever else the argv contains, it must actually forward something."""
+    for spec in (
+        SshLocalForwardSpec(
+            endpoint=ENDPOINT, local_port=8080, target_host="10.4.9.5", target_port=443
+        ),
+        SshDynamicForwardSpec(endpoint=ENDPOINT, local_port=1080),
+        SshRemoteForwardSpec(
+            endpoint=ENDPOINT, remote_port=9000, target_host="127.0.0.1", target_port=8000
+        ),
+        SshRemoteDynamicSpec(endpoint=ENDPOINT, remote_port=1080),
+    ):
+        argv = argv_for(adapter, spec)
+        assert {"-L", "-D", "-R"} & set(argv), f"{type(spec).__name__} forwards nothing"
 
 
 # ── Forward specifications ──────────────────────────────────────────────
