@@ -25,10 +25,14 @@ class AuditContextMiddleware:
 
         token = set_context(
             AuditContext(
-                actor=None,  # resolved lazily below — auth runs after this middleware
+                # Left unset on purpose: authentication has not run yet. The
+                # request is carried instead, and the actor is resolved from it
+                # at write time, by which point request.user is populated.
+                actor=None,
                 actor_label=SYSTEM_ACTOR_LABEL,
                 request_id=request_id,
                 source_ip=_client_ip(request),
+                request=request,
             )
         )
         try:

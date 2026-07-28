@@ -1,23 +1,112 @@
-version: '3.8'
+# MudaleTunnel — full stack.
+#
+#   cp .env.example .env      # then edit it; MUDALE_SECRET_KEY is required
+#   docker compose up -d --build
+#   docker compose run --rm web python manage.py createsuperuser
+#
+# Four services. `web` and `engine` run the same image with different commands:
+# the engine owns long-lived subprocesses, so it must not be recycled when the
+# web tier is redeployed. That separation is the whole point of the design.
+
+name: mudaletunnel
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: mudaletunnel:3
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    MUDALE_DB_HOST: db
+    MUDALE_REDIS_URL: redis://redis:6379/0
+    # Terminated by a proxy in a real deployment, not by the app container.
+    MUDALE_SSL_REDIRECT: "false"
+    MUDALE_HSTS_SECONDS: "0"
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
 
 services:
-  mudaletunnel:
-    build: .
-    container_name: mudaletunnel
-    # Standard bridge network (works on all platforms)
-    # For host-accessible tunnels on Linux, uncomment 'network_mode: host' and comment out 'ports:'
-    ports:
-      - "8000:8000"
-    # Uncomment for host network mode (Linux only - makes tunnels accessible from host):
-    # network_mode: host
-    volumes:
-      # Mount SSH config if needed
-      # On Windows, use absolute path: C:/Users/YourUsername/.ssh:/root/.ssh:ro
-      - ~/.ssh:/root/.ssh:ro
-    environment:
-      - PYTHONUNBUFFERED=1
-    # Run web interface by default using uv
-    command: uv run python main.py web --host 0.0.0.0 --port 8000
+  db:
+    image: postgres:17-alpine
     restart: unless-stopped
-    # For CLI mode, override command:
-    # command: uv run python main.py cli
+    environment:
+      POSTGRES_DB: ${MUDALE_DB_NAME:-mudale}
+      POSTGRES_USER: ${MUDALE_DB_USER:-mudale}
+      POSTGRES_PASSWORD: ${MUDALE_DB_PASSWORD:?MUDALE_DB_PASSWORD must be set in .env}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    # Not published to the host: nothing outside the compose network needs it,
+    # and this database holds engagement scope and findings.
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MUDALE_DB_USER:-mudale} -d ${MUDALE_DB_NAME:-mudale}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Applies migrations once, then exits. Both long-running services wait for it,
+  # so neither starts against a schema that has not been brought up to date.
+  migrate:
+    <<: *app
+    restart: "no"
+    command: ["python", "manage.py", "migrate", "--noinput"]
+
+  web:
+    <<: *app
+    command: ["daphne", "-b", "0.0.0.0", "-p", "8000", "mudale.asgi:application"]
+    ports:
+      # Bound to loopback. This dashboard opens tunnels into client networks;
+      # exposing it on 0.0.0.0 should be a deliberate act behind a TLS proxy.
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  engine:
+    <<: *app
+    command: ["python", "manage.py", "enginectl"]
+    # Read-only mount of the operator's keys, so the ssh adapter can authenticate
+    # without this control plane ever storing private key material itself.
+    volumes:
+      - ${MUDALE_SSH_DIR:-~/.ssh}:/home/mudale/.ssh:ro
+    # The engine's forwarded ports live in its own network namespace. Publish the
+    # ones you intend to use from the host, e.g. a SOCKS proxy on 1080:
+    #   ports:
+    #     - "127.0.0.1:1080:1080"
+    # On Linux, `network_mode: host` avoids this entirely — but it also drops
+    # network isolation, so treat it as a deliberate trade-off rather than the
+    # default. It is incompatible with the `ports:` mapping above.
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Tunnels should survive a web-tier restart; give the daemon time to stop its
+    # children cleanly rather than having them SIGKILLed out from under it.
+    stop_grace_period: 30s
+
+volumes:
+  db_data:

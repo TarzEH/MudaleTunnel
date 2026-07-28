@@ -55,10 +55,12 @@ def record(
         object_id = object_id or str(getattr(obj, "pk", "") or "")
         object_label = object_label or str(obj)[:256]
 
+    actor, actor_label = ctx.resolved_actor()
+
     try:
         return AuditEvent.objects.create(
-            actor=ctx.actor,
-            actor_label=(ctx.actor_label or "system")[:128],
+            actor=actor,
+            actor_label=(actor_label or "system")[:128],
             action=action,
             result=result,
             engagement=engagement,
