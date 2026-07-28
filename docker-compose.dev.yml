@@ -1,0 +1,47 @@
+# Backing services for local development.
+#
+# Only Postgres and Redis run here — Django and the engine daemon run on the
+# host so that the engine can create TUN interfaces and reach the operator's own
+# network without container networking getting in the way.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# Both services bind to 127.0.0.1 only. A development database holding
+# engagement data must not be reachable from the local network.
+
+name: mudaletunnel-dev
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mudale
+      POSTGRES_USER: mudale
+      POSTGRES_PASSWORD: mudale-dev-password
+      # Slightly faster local test runs; never use on a real deployment.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mudale -d mudale"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  db_data:
