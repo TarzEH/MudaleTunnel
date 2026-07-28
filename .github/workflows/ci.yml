@@ -151,14 +151,25 @@ jobs:
             -p 8000:8000 mudaletunnel:ci
 
           for _ in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8000/api/v1/health/ >/dev/null 2>&1; then
-              echo "healthy"
-              docker rm -f mudale-ci mudale-ci-db mudale-ci-redis
-              docker network rm mudale-ci-net
-              exit 0
-            fi
+            curl -fsS http://127.0.0.1:8000/api/v1/health/ >/dev/null 2>&1 && break
             sleep 2
           done
-          echo "container never became healthy"
-          docker logs mudale-ci
-          exit 1
+
+          if ! curl -fsS http://127.0.0.1:8000/api/v1/health/ >/dev/null 2>&1; then
+            echo "container never became healthy"; docker logs mudale-ci; exit 1
+          fi
+
+          # The health endpoint answering is not enough: it stayed green once
+          # while every dashboard asset 404'd, because Django serves static
+          # files only under DEBUG and daphne serves none at all. Follow the
+          # asset the shell actually references.
+          asset=$(curl -fsS http://127.0.0.1:8000/ | grep -o '/static/assets/[^"]*\.js' | head -1)
+          test -n "$asset" || { echo "no dashboard asset referenced"; exit 1; }
+
+          if ! curl -fsS "http://127.0.0.1:8000$asset" >/dev/null; then
+            echo "dashboard asset $asset is not served"; docker logs mudale-ci; exit 1
+          fi
+          echo "healthy, and the dashboard loads"
+
+          docker rm -f mudale-ci mudale-ci-db mudale-ci-redis
+          docker network rm mudale-ci-net

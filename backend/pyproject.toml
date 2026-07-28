@@ -18,6 +18,9 @@ dependencies = [
     "channels>=4.2",
     "channels-redis>=4.2",
     "daphne>=4.1",
+    # Serves the built dashboard. Django only serves static files under DEBUG,
+    # and daphne serves none at all, so without this the SPA 404s in production.
+    "whitenoise>=6.8",
     "psycopg[binary]>=3.2",
     "redis>=5.2",
     "python-dotenv>=1.0",
