@@ -22,6 +22,9 @@ dependencies = [
     "redis>=5.2",
     "python-dotenv>=1.0",
     "pydantic>=2.10",
+    # nmap XML is attacker-influenced (service banners are echoed from the
+    # target), so it is parsed with hardened bindings rather than the stdlib's.
+    "defusedxml>=0.7",
 ]
 
 [project.optional-dependencies]

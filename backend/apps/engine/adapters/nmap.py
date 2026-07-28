@@ -28,14 +28,20 @@ from apps.scans.models import ScanProfile
 
 IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
 
+#: Emit XML on stdout. The '-' destination is ours, not user input, so nmap
+#: still never writes a file — and structured output means results are parsed
+#: from a real document instead of by pattern-matching human-readable text,
+#: which is what made v2's parser miss services.
+XML_OUTPUT_ARGS: tuple[str, ...] = ("-oX", "-")
+
 #: Profile → nmap arguments. The single source of truth for what a scan may do.
 #:
 #: Deliberately excluded from every profile:
-#:   -sS/-sU raw-socket scans   need root; the engine must not require it
+#:   -sS raw-socket SYN scan    needs root; the engine must not require it
 #:   -O, -A                     OS detection needs raw sockets too
 #:   --script                   arbitrary NSE execution
-#:   -oN/-oX/-oG/--datadir      anything that writes to the filesystem
-#: Output is captured from stdout instead, so nmap never writes a file.
+#:   -oN/-oG/-oA/--datadir      anything that writes to a path
+#: The only output flag is XML_OUTPUT_ARGS above, which goes to stdout.
 PROFILE_ARGS: dict[str, tuple[str, ...]] = {
     ScanProfile.DISCOVERY: ("-sn", "-T4"),
     ScanProfile.QUICK: ("-sT", "-F", "-T4", "--open"),
@@ -98,7 +104,7 @@ class NmapAdapter:
         if args is None:
             raise ValueError(f"Unknown scan profile {profile!r}")
 
-        argv = [self.binary(), *args]
+        argv = [self.binary(), *args, *XML_OUTPUT_ARGS]
         if through_tunnel:
             argv += list(TUNNELLED_ARGS)
         if target.version == 6:
