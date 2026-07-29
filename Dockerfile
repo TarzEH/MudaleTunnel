@@ -43,6 +43,8 @@ FROM python:3.12-slim AS runtime
 
 # openssh-client  — the ssh adapter's binary
 # nmap            — the scan adapter's binary
+# proxychains4    — routes a scan through a pivot's SOCKS proxy, so a scan
+#                   labelled "through the tunnel" genuinely travels through it
 # iproute2        — route management for tunnel interfaces
 # tini            — a real PID 1, so SIGTERM reaches the daemon and it can stop
 #                   its supervised children cleanly instead of being SIGKILLed
@@ -50,6 +52,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       openssh-client \
       nmap \
+      proxychains4 \
       iproute2 \
       tini \
       curl \

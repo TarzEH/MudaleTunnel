@@ -8,6 +8,14 @@
 </p>
 
 <p align="center">
+  <img src="docs/demo.gif" alt="MudaleTunnel CLI" width="900">
+</p>
+
+<p align="center">
+  <em>Real commands, invented data — every address in the recording is fiction.</em>
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick start</a> &bull;
   <a href="#using-it">Using it</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
@@ -20,14 +28,22 @@
 
 ## What this is
 
-Tools like [ligolo-ng](https://github.com/nicocha30/ligolo-ng) are very good at
-*moving packets*. What they don't give you is the layer around that: state that
-survives a restart, an audit trail that says who opened which tunnel into a
-client network, more than one operator, and a clear view of where you actually
-are.
+Pivoting tools are good at *moving packets*. The hard part is knowing what is
+actually on the other side, keeping track of it, and being able to prove
+afterwards what you touched.
 
-MudaleTunnel is that layer. It drives tunnel engines rather than reimplementing
-them, and adds:
+MudaleTunnel does pivoting the other way round. Instead of routing a subnet you
+*hope* is there into a virtual interface, it:
+
+1. **Reaches** — opens a SOCKS proxy through a foothold (`ssh -D`).
+2. **Discovers** — runs nmap *through* that proxy, genuinely proxied. Every open
+   port it finds is a host the pivot can reach, recorded against the tunnel it
+   was seen through.
+3. **Exposes** — turns any finding into a plain local port-forward (`ssh -L`),
+   so tools that cannot speak SOCKS get a `localhost` port.
+4. **Chains** — a newly reachable host can become the next foothold.
+
+The map is evidence, not assumption. And around that:
 
 | | |
 |---|---|
@@ -146,6 +162,30 @@ error  10.0.0.0/8 is not fully contained by any authorised range (10.4.0.0/16, 1
 The second one matters: a `/16` allowance does **not** permit scanning the
 enclosing `/8`, even though they overlap. Partial overlap fails closed.
 
+### Turn a finding into a local port
+
+Scanning through a pivot is only half of it. The other half is acting on what
+it found:
+
+```bash
+mudale pivot map --engagement 1          # what is reachable, and through what
+mudale pivot expose 42                   # one finding  -> a localhost port
+mudale pivot auto 3                       # everything it found -> forwards
+mudale pivot proxychains 3 -o mudale.conf # config for tools that speak SOCKS
+```
+
+`pivot auto` is deliberately bounded: it skips 22, 3389, 5985 and 623 unless you
+ask for them, and caps how many forwards it will open. One command should not be
+able to open a hundred ports into a client network by accident.
+
+```bash
+proxychains4 -f mudale.conf nmap -sT -Pn 10.4.50.0/24
+```
+
+`-sT -Pn` is not optional through a SOCKS proxy: it carries TCP connections, so
+a SYN scan cannot work and nmap's host discovery has nothing to probe with. The
+generated config says so, because it is the step everyone gets wrong.
+
 ### Tunnel kinds
 
 | Kind | `ssh` equivalent | Use for |
@@ -261,11 +301,16 @@ Layout and conventions: [`docs/development.md`](docs/development.md).
 pivot, engagement scoping, the audit trail, the dashboard, the CLI, and
 multi-operator access.
 
-**Not yet:** the ligolo-ng adapter is a stub. The models and API already
-describe it, but the engine cannot drive a ligolo proxy, so there is no
-TUN-interface pivoting and no full TCP/UDP/ICMP routing yet. Routes and
-listeners are modelled, scope-checked and stored, but only take effect for
-engines that implement them — which today means neither.
+**Known limits, stated plainly:**
+
+- SOCKS carries **TCP only**. No UDP, no ICMP — `ping` will not traverse a
+  pivot. Tools that build a virtual network interface do carry those; this
+  deliberately does not, in exchange for needing no agent and no root.
+- Scanning through a pivot needs `proxychains4` on the engine host. It is in the
+  Docker image; the dashboard reports `pivot_scanning` as unavailable if it is
+  missing, rather than quietly scanning from the wrong vantage point.
+- nmap runs unprivileged, so scans are `connect()` scans with `-Pn`. No SYN
+  scanning, no OS detection.
 
 Version 3 is a rewrite; versions 1–2 share nothing with it but the name and the
 idea. [`docs/architecture.md`](docs/architecture.md) records what changed and

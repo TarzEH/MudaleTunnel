@@ -9,8 +9,8 @@ backend/
   apps/
     accounts/        Operator, API keys, authentication
     engagements/     Engagement + scope.py  ← the authorisation core
-    agents/          Footholds (ssh or ligolo)
-    tunnels/         Tunnel · Route · Listener · TunnelLog + services.py
+    agents/          Footholds you pivot through
+    tunnels/         Tunnel · TunnelLog + services.py + pivot.py
     scans/           Scan · Service + parsers.py + services.py
     audit/           Append-only trail, context, middleware
     engine/          specs · process · adapters/ · supervisor · enginectl
@@ -96,10 +96,8 @@ through.
    `plan()` and `interpret_exit()`.
 4. Wire it into `Supervisor._start_tunnel`.
 5. Test the argv construction, and add an integration test that proves the
-   tunnel actually carries traffic.
-
-The ligolo-ng adapter is the obvious next one: the models, API and dashboard
-already describe it, and only the adapter and its supervisor branch are missing.
+   tunnel actually carries traffic. Asserting on argv alone is not enough — see
+   the `ClearAllForwardings` note in [architecture.md](architecture.md).
 
 ## Migrations
 

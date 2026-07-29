@@ -80,7 +80,7 @@ export function Settings() {
                     type="password"
                     value={apiKeyDraft}
                     onChange={(e) => setApiKeyDraft(e.target.value)}
-                    placeholder="mt_live_…"
+                    placeholder="mdlt_…"
                     mono
                     className="w-full"
                   />
@@ -117,8 +117,11 @@ export function Settings() {
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-secondary">
                           <span>Last heartbeat {formatRelativeTime(instance.last_heartbeat_at)}</span>
-                          {instance.capabilities.map((cap) => (
-                            <Badge key={cap}>{cap}</Badge>
+                          {Object.entries(instance.capabilities).map(([name, ready]) => (
+                            <Badge key={name} tone={ready ? 'ok' : 'neutral'}>
+                              {name}
+                              {ready ? '' : ' unavailable'}
+                            </Badge>
                           ))}
                         </div>
                       </li>

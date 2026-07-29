@@ -285,7 +285,7 @@ def test_shutdown_leaves_wanted_tunnels_restartable(engagement):
 def test_registration_reports_capabilities(supervisor):
     instance = supervisor.register()
     assert instance.instance_id == "test-engine"
-    assert set(instance.capabilities) == {"ssh", "nmap"}
+    assert set(instance.capabilities) == {"ssh", "nmap", "pivot_scanning"}
 
 
 def test_log_pruning_keeps_the_table_bounded(supervisor, engagement, monkeypatch):

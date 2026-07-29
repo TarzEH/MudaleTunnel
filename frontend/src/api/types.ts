@@ -16,7 +16,10 @@ export interface EngineInstance {
   instance_id: string;
   hostname: string;
   version: string;
-  capabilities: string[];
+  /** What this engine can drive, keyed by capability name. The backend sends
+   *  an object, not a list, so an unavailable capability is reported as
+   *  `false` rather than simply being absent. */
+  capabilities: Record<string, boolean>;
   last_heartbeat_at: string | null;
 }
 
@@ -250,6 +253,10 @@ export interface AuditEvent {
 export type UserRole = 'admin' | 'operator' | 'viewer';
 
 export interface Me {
+  /** Server version, shown in the sidebar so a screenshot or bug report always
+   *  says which build it came from. Authenticated — /health/ deliberately does
+   *  not disclose it. */
+  server_version: string;
   id: number;
   username: string;
   callsign: string;

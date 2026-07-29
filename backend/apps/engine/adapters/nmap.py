@@ -22,6 +22,8 @@ bug that let a dash through would be read by nmap as a target, not an option.
 from __future__ import annotations
 
 import ipaddress
+import os
+from pathlib import Path
 
 from apps.engine.adapters.base import AdapterUnavailable, LaunchPlan, resolve_binary
 from apps.scans.models import ScanProfile
@@ -53,21 +55,34 @@ PROFILE_ARGS: dict[str, tuple[str, ...]] = {
 #: Profiles whose nmap arguments require raw sockets, i.e. root on the engine host.
 PRIVILEGED_PROFILES = frozenset({ScanProfile.UDP_TOP})
 
-#: Appended when the scan is routed through a tunnel.
+#: Appended whenever nmap cannot do its own host discovery properly — which is
+#: any time it lacks raw sockets, i.e. through a SOCKS pivot *or* simply running
+#: unprivileged.
 #:
-#: Through a userland pivot there are no raw sockets, so a "SYN scan" silently
-#: degrades to a connect() scan and nmap's own host discovery misreports hosts as
-#: down. -Pn --unprivileged tells nmap the truth about its environment and stops
-#: it drawing conclusions it cannot support.
-TUNNELLED_ARGS: tuple[str, ...] = ("-Pn", "--unprivileged")
+#: This matters more than it sounds. Without raw sockets nmap cannot send ICMP
+#: echo or ARP probes, so its discovery phase concludes that live hosts are down
+#: and skips them entirely. The scan then completes quickly and reports almost
+#: nothing, which is indistinguishable from "the network is empty". -Pn says
+#: "assume the host is up and just try the ports"; --unprivileged stops nmap
+#: attempting raw-socket techniques it will silently fail at.
+UNPRIVILEGED_ARGS: tuple[str, ...] = ("-Pn", "--unprivileged")
+
+#: Kept as an alias: through a pivot the same reasoning applies.
+TUNNELLED_ARGS = UNPRIVILEGED_ARGS
+
+#: proxychains config written per scan. `-q` keeps its banner out of the XML we
+#: parse from stdout.
+PROXYCHAINS_QUIET = "-q"
 
 
 class NmapAdapter:
     kind_prefix = "nmap"
 
-    def __init__(self, nmap_bin: str):
+    def __init__(self, nmap_bin: str, proxychains_bin: str = "proxychains4"):
         self._configured = nmap_bin
         self._resolved: str | None = None
+        self._configured_proxychains = proxychains_bin
+        self._proxychains: str | None = None
 
     def is_available(self) -> bool:
         try:
@@ -86,13 +101,19 @@ class NmapAdapter:
         *,
         target: IPNetwork,
         profile: str,
-        through_tunnel: bool = False,
+        socks: tuple[str, int] | None = None,
     ) -> LaunchPlan:
         """Build the launch plan for one scan.
 
         ``target`` must already be a parsed, scope-checked network object. The
         type annotation is enforced at runtime because this is the boundary the
         whole injection defence rests on.
+
+        ``socks`` is the ``(host, port)`` of a pivot's SOCKS proxy. When given,
+        nmap is run under proxychains so the scan genuinely travels through the
+        foothold. Recording the association without routing the traffic would
+        make the resulting map a claim rather than evidence, which is the whole
+        point of discovering reachability this way.
         """
         if not isinstance(target, ipaddress.IPv4Network | ipaddress.IPv6Network):
             raise TypeError(
@@ -105,19 +126,79 @@ class NmapAdapter:
             raise ValueError(f"Unknown scan profile {profile!r}")
 
         argv = [self.binary(), *args, *XML_OUTPUT_ARGS]
-        if through_tunnel:
-            argv += list(TUNNELLED_ARGS)
+        if socks is not None or not self.has_raw_sockets():
+            argv += list(UNPRIVILEGED_ARGS)
         if target.version == 6:
             argv.append("-6")
 
         # Everything after '--' is a target, never an option.
         argv += ["--", str(target)]
 
+        config_path = None
+        if socks is not None:
+            config_path = self._write_proxychains_config(*socks)
+            argv = [self.proxychains_binary(), PROXYCHAINS_QUIET, "-f", config_path, *argv]
+
         return LaunchPlan(
             argv=argv,
-            description=f"{profile} scan of {target}",
+            description=(
+                f"{profile} scan of {target}"
+                + (f" through {socks[0]}:{socks[1]}" if socks else "")
+            ),
             startup_timeout=30.0,
         )
+
+    @staticmethod
+    def has_raw_sockets() -> bool:
+        """Whether nmap will be able to do real host discovery.
+
+        Only root gets raw sockets. The engine runs unprivileged by design, so
+        this is normally False — and the scan arguments have to reflect that
+        rather than pretend otherwise.
+        """
+        return os.geteuid() == 0
+
+    def proxychains_binary(self) -> str:
+        if self._proxychains is None:
+            self._proxychains = resolve_binary(self._configured_proxychains, name="proxychains4")
+        return self._proxychains
+
+    def can_scan_through_a_pivot(self) -> bool:
+        """Whether tunnelled scans are possible on this host."""
+        try:
+            self.proxychains_binary()
+        except AdapterUnavailable:
+            return False
+        return True
+
+    def _write_proxychains_config(self, host: str, port: int) -> str:
+        """Write a per-scan proxychains config.
+
+        Written to a private directory under the engine's own state, not /tmp:
+        a world-readable config naming a live pivot is an invitation.
+        """
+        from django.conf import settings
+
+        directory = Path(settings.ENGINE["LOG_DIR"]).parent / "proxychains"
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+        path = directory / f"socks-{host.replace(':', '_')}-{port}.conf"
+        path.write_text(
+            "\n".join(
+                [
+                    "strict_chain",
+                    "proxy_dns",
+                    "remote_dns_subnet 224",
+                    "tcp_read_time_out 15000",
+                    "tcp_connect_time_out 8000",
+                    "[ProxyList]",
+                    f"socks5 {host} {port}",
+                    "",
+                ]
+            )
+        )
+        path.chmod(0o600)
+        return str(path)
 
     @staticmethod
     def requires_root(profile: str) -> bool:

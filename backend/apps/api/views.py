@@ -378,7 +378,12 @@ class AuditEventViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 def _me_payload(user) -> dict:
+    from mudale import __version__
+
     return {
+        # Shown in the dashboard footer. Authenticated on purpose: useful to an
+        # operator, a shortcut to a CVE list for anyone else.
+        "server_version": __version__,
         "id": user.id,
         "username": user.get_username(),
         "callsign": user.callsign,
@@ -476,5 +481,10 @@ def bootstrap(request):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def health(request):
-    """Liveness probe. Reveals nothing about engagement data."""
+    """Liveness probe.
+
+    Deliberately says nothing but "ok" — no version, no hostname, no counts.
+    It is unauthenticated, so anything it reveals is revealed to everyone, and a
+    build number is a shortcut to the right CVE list.
+    """
     return Response({"status": "ok"})

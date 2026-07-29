@@ -18,6 +18,8 @@ process exit, and liveness becomes a truthful health signal.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from apps.engine.adapters.base import AdapterUnavailable, LaunchPlan, resolve_binary
 from apps.engine.specs import (
     SshDynamicForwardSpec,
@@ -61,9 +63,20 @@ EXIT_EXPLANATIONS: dict[int, str] = {
 class SshAdapter:
     kind_prefix = "ssh"
 
-    def __init__(self, ssh_bin: str):
+    def __init__(self, ssh_bin: str, known_hosts: str | None = None):
         self._configured = ssh_bin
         self._resolved: str | None = None
+        self._known_hosts = known_hosts
+
+    def known_hosts_path(self) -> str:
+        """Where the engine records host keys it has accepted."""
+        if self._known_hosts:
+            return self._known_hosts
+        from django.conf import settings
+
+        directory = Path(settings.ENGINE["LOG_DIR"]).parent
+        directory.mkdir(parents=True, exist_ok=True)
+        return str(directory / "known_hosts")
 
     # ── Availability ────────────────────────────────────────────────────
 
@@ -141,6 +154,14 @@ class SshAdapter:
             # tunnel into a client network.
             "-F",
             "/dev/null",
+            # The control plane keeps its own host-key trust store rather than
+            # borrowing the operator's ~/.ssh/known_hosts. Same reasoning as
+            # -F /dev/null: a tunnel's behaviour must come from its spec, and a
+            # key the operator happened to accept for an unrelated purpose is
+            # not a decision this engine should inherit. Verification still
+            # happens — it is just recorded against the engine's own file.
+            "-o",
+            f"UserKnownHostsFile={self.known_hosts_path()}",
             "-p",
             str(endpoint.port),
         ]
