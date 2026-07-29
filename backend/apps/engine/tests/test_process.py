@@ -135,9 +135,13 @@ def test_child_of_child_is_also_stopped():
 
     v2 signalled a single PID and left strays behind — including, in the ssh -f
     case, the process actually carrying the tunnel.
+
+    Kept to POSIX sh: an earlier version used ``exec -a`` to give the grandchild
+    a recognisable name, which is a bash builtin. macOS's /bin/sh accepts it and
+    Ubuntu's dash does not, so the grandchild died instantly in CI and the test
+    failed for a reason that had nothing to do with process groups.
     """
-    marker = "mudale-grandchild-marker"
-    script = f"/bin/sh -c 'exec -a {marker} sleep 300' & echo $!; wait"
+    script = "sleep 300 & echo $!; wait"
     proc = SupervisedProcess(argv=["/bin/sh", "-c", script])
     proc.start()
 
