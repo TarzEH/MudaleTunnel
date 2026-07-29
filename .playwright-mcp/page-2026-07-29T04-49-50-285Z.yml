@@ -1,0 +1,81 @@
+- generic [ref=e31]:
+  - complementary [ref=e32]:
+    - generic [ref=e33]: MudaleTunnel
+    - generic [ref=e35]:
+      - generic [ref=e36]: Engagement
+      - combobox "Engagement" [ref=e38]:
+        - option "Contoso retainer" [selected]
+        - option "Northwind DMZ"
+        - option "Acme internal"
+        - option "Local lab"
+    - navigation "Primary" [ref=e39]:
+      - list [ref=e40]:
+        - listitem [ref=e41]:
+          - link "Sessions" [ref=e42] [cursor=pointer]:
+            - /url: /
+        - listitem [ref=e49]:
+          - link "Topology" [ref=e50] [cursor=pointer]:
+            - /url: /topology
+        - listitem [ref=e55]:
+          - link "Scans" [ref=e56] [cursor=pointer]:
+            - /url: /scans
+        - listitem [ref=e63]:
+          - link "Agents" [ref=e64] [cursor=pointer]:
+            - /url: /agents
+        - listitem [ref=e71]:
+          - link "Audit" [ref=e72] [cursor=pointer]:
+            - /url: /audit
+        - listitem [ref=e77]:
+          - link "Engagements" [ref=e78] [cursor=pointer]:
+            - /url: /engagements
+        - listitem [ref=e84]:
+          - link "Settings" [ref=e85] [cursor=pointer]:
+            - /url: /settings
+    - generic [ref=e91]:
+      - generic [ref=e96]:
+        - generic [ref=e97]: operator
+        - generic [ref=e98]: admin
+      - generic [ref=e100]:
+        - generic [ref=e101]: Live
+        - generic "Server version" [ref=e104]: v3.0.0
+  - main [ref=e105]:
+    - generic [ref=e106]:
+      - generic [ref=e107]:
+        - generic [ref=e108]:
+          - heading "Sessions" [level=1] [ref=e109]
+          - paragraph [ref=e110]: Active and historical tunnels for Contoso retainer
+        - button "New tunnel" [ref=e111] [cursor=pointer]
+      - generic [ref=e114]:
+        - textbox "Filter tunnels" [ref=e116]:
+          - /placeholder: Filter by label, description, agent…
+        - combobox "Filter by status" [ref=e117]:
+          - option "All statuses" [selected]
+          - option "Pending"
+          - option "Starting"
+          - option "Active"
+          - option "Degraded"
+          - option "Stopping"
+          - option "Stopped"
+          - option "Failed"
+      - table [ref=e119]:
+        - rowgroup [ref=e120]:
+          - row [ref=e121]:
+            - columnheader "Status" [ref=e122]
+            - columnheader "Label" [ref=e123]
+            - columnheader "Kind" [ref=e124]
+            - columnheader "Description" [ref=e125]
+            - columnheader "Agent" [ref=e126]
+            - columnheader "Uptime" [ref=e127]
+            - columnheader [ref=e128]
+        - rowgroup [ref=e129]:
+          - row [ref=e130] [cursor=pointer]:
+            - cell "stopped" [ref=e131]
+            - cell "legacy-jump" [ref=e135]
+            - cell "SSH SOCKS proxy" [ref=e136]
+            - cell "SOCKS on 127.0.0.1:1080 via 192.168.120.8" [ref=e138]
+            - cell "legacy-jump" [ref=e139]
+            - cell "9d 0h" [ref=e140]
+            - cell [ref=e141]:
+              - generic [ref=e142]:
+                - button "Start legacy-jump" [ref=e143]
+                - button "View logs for legacy-jump" [ref=e146]
