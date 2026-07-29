@@ -42,7 +42,7 @@ export function Agents() {
           <EmptyState
             icon={<IconServer width={28} height={28} />}
             title="No agents registered"
-            description="Agents are deployed via the engine (SSH or Ligolo) and register here once they check in."
+            description="Agents are SSH footholds you register — point the engine at a reachable host and it checks in here."
           />
         ) : (
           <table className="w-full border-collapse text-sm">

@@ -182,42 +182,9 @@ class SshRemoteDynamicSpec(BaseSpec):
         return _validate_bind(value)
 
 
-class LigoloTunnelSpec(BaseSpec):
-    """A ligolo-ng TUN interface bound to an agent session."""
-
-    kind: Literal[TunnelKind.LIGOLO_TUN] = TunnelKind.LIGOLO_TUN
-    # Interface name created on the operator host, e.g. "ligolo0".
-    interface_name: str = "ligolo0"
-    # ligolo's session identifier, as reported by the proxy.
-    session_id: str
-    # Let ligolo discover and attach the agent's subnets automatically.
-    autoroute: bool = False
-
-    @field_validator("interface_name")
-    @classmethod
-    def _check_iface(cls, value: str) -> str:
-        # Linux caps interface names at IFNAMSIZ-1 = 15 bytes.
-        if not re.match(r"^[a-z][a-z0-9_-]{0,14}$", value):
-            raise ValueError(
-                f"{value!r} is not a valid interface name (lowercase, starts with a letter, "
-                f"max 15 characters)"
-            )
-        return value
-
-    @field_validator("session_id")
-    @classmethod
-    def _check_session(cls, value: str) -> str:
-        if not re.match(r"^[A-Za-z0-9_.:-]{1,128}$", value):
-            raise ValueError(f"{value!r} is not a valid ligolo session id")
-        return value
-
 
 AnyTunnelSpec = (
-    SshLocalForwardSpec
-    | SshDynamicForwardSpec
-    | SshRemoteForwardSpec
-    | SshRemoteDynamicSpec
-    | LigoloTunnelSpec
+    SshLocalForwardSpec | SshDynamicForwardSpec | SshRemoteForwardSpec | SshRemoteDynamicSpec
 )
 
 SPEC_BY_KIND: dict[str, type[BaseSpec]] = {
@@ -225,7 +192,6 @@ SPEC_BY_KIND: dict[str, type[BaseSpec]] = {
     TunnelKind.SSH_DYNAMIC: SshDynamicForwardSpec,
     TunnelKind.SSH_REMOTE: SshRemoteForwardSpec,
     TunnelKind.SSH_REMOTE_DYNAMIC: SshRemoteDynamicSpec,
-    TunnelKind.LIGOLO_TUN: LigoloTunnelSpec,
 }
 
 

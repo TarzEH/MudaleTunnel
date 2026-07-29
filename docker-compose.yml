@@ -23,6 +23,10 @@ x-app: &app
     # Terminated by a proxy in a real deployment, not by the app container.
     MUDALE_SSL_REDIRECT: "false"
     MUDALE_HSTS_SECONDS: "0"
+    # Printed on the sign-in page, but only while ALLOWED_HOSTS stays
+    # loopback-only — settings withhold them on anything reachable from
+    # elsewhere. Clear this before exposing the dashboard.
+    MUDALE_DEMO_CREDENTIALS: ${MUDALE_DEMO_CREDENTIALS:-}
   depends_on:
     db:
       condition: service_healthy

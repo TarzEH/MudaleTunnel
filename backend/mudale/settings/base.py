@@ -193,6 +193,27 @@ SECURE_HSTS_SECONDS = env_int("MUDALE_HSTS_SECONDS", default=31536000)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_SSL_REDIRECT = env_bool("MUDALE_SSL_REDIRECT", default=True)
 
+# ── Demo credentials ────────────────────────────────────────────────────
+#
+# Set MUDALE_DEMO_CREDENTIALS="user:password" to print sign-in details on the
+# login page. Convenient for a local evaluation, obviously unacceptable on a
+# console that opens tunnels into client networks — so it is honoured *only*
+# when the deployment is loopback-only. On anything reachable from elsewhere it
+# is ignored, with a warning, rather than trusted.
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0"}  # noqa: S104
+_demo_raw = env_str("MUDALE_DEMO_CREDENTIALS", default="")
+_is_loopback_only = bool(ALLOWED_HOSTS) and all(
+    host.strip().lower() in _LOOPBACK_HOSTS for host in ALLOWED_HOSTS
+)
+
+if _demo_raw and ":" in _demo_raw and _is_loopback_only:
+    _demo_user, _demo_password = _demo_raw.split(":", 1)
+    DEMO_CREDENTIALS = {"username": _demo_user.strip(), "password": _demo_password.strip()}
+else:
+    DEMO_CREDENTIALS = None
+
+DEMO_CREDENTIALS_SUPPRESSED = bool(_demo_raw) and not _is_loopback_only
+
 # WebSocket origins allowed to connect. Empty means "same origin only",
 # which channels enforces via AllowedHostsOriginValidator.
 WEBSOCKET_ALLOWED_ORIGINS = env_list("MUDALE_WEBSOCKET_ALLOWED_ORIGINS", default=[])
@@ -204,8 +225,6 @@ ENGINE = {
     # a missing binary disables that adapter rather than crashing the daemon.
     "SSH_BIN": env_str("MUDALE_SSH_BIN", default="ssh"),
     "NMAP_BIN": env_str("MUDALE_NMAP_BIN", default="nmap"),
-    "LIGOLO_PROXY_BIN": env_str("MUDALE_LIGOLO_PROXY_BIN", default=""),
-    "LIGOLO_AGENT_DIR": env_str("MUDALE_LIGOLO_AGENT_DIR", default=""),
     # How often the supervisor reconciles desired state against reality.
     "RECONCILE_INTERVAL_SECONDS": env_int("MUDALE_ENGINE_RECONCILE_INTERVAL", default=5),
     # How long to wait for a process to die on SIGTERM before SIGKILL.

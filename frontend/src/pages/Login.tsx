@@ -1,7 +1,7 @@
-import { FormEvent, useState } from 'react';
-import { ApiError } from '../api/client';
+import { FormEvent, useEffect, useState } from 'react';
+import { api, ApiError } from '../api/client';
 import { login } from '../api/hooks';
-import type { Me } from '../api/types';
+import type { Bootstrap, Me } from '../api/types';
 import { Button } from '../components/Button';
 
 interface Props {
@@ -21,6 +21,30 @@ export function Login({ onSignedIn }: Props) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<Bootstrap>('/bootstrap/')
+      .then((value) => {
+        if (!cancelled) setBootstrap(value);
+      })
+      .catch(() => {
+        // A deployment that does not expose bootstrap is a normal deployment.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const demo = bootstrap?.demo_credentials ?? null;
+
+  function useDemoCredentials() {
+    if (!demo) return;
+    setUsername(demo.username);
+    setPassword(demo.password);
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -88,6 +112,45 @@ export function Login({ onSignedIn }: Props) {
             {busy ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>
+
+        {demo && (
+          <div className="mt-6 rounded-md border border-subtle bg-surface p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="inline-block h-2 w-2 rounded-full bg-warn" aria-hidden="true" />
+              <span className="text-xs font-medium text-text-secondary">
+                Demo credentials
+              </span>
+            </div>
+            <dl className="space-y-1 text-sm">
+              <div className="flex gap-2">
+                <dt className="w-20 text-text-muted">username</dt>
+                <dd className="font-mono text-text-primary">{demo.username}</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="w-20 text-text-muted">password</dt>
+                <dd className="font-mono text-text-primary">{demo.password}</dd>
+              </div>
+            </dl>
+            <button
+              type="button"
+              onClick={useDemoCredentials}
+              className="mt-2 text-xs text-accent underline-offset-2 hover:underline focus-visible:underline"
+            >
+              Fill them in
+            </button>
+            <p className="mt-2 text-xs text-text-muted">
+              Shown because this deployment is loopback-only. Change the password before
+              exposing it anywhere.
+            </p>
+          </div>
+        )}
+
+        {bootstrap?.demo_suppressed && (
+          <p className="mt-6 rounded-md border border-subtle px-3 py-2 text-xs text-text-muted">
+            Demo credentials are configured but withheld: this deployment is reachable
+            beyond loopback.
+          </p>
+        )}
 
         <p className="mt-6 text-xs text-text-muted">
           Using an API key instead? Set it under Settings once signed in, or pass it as a

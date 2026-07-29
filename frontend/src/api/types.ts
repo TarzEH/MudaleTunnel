@@ -50,7 +50,7 @@ export type EngagementWritePayload = Partial<
   >
 >;
 
-export type AgentEngine = 'ssh' | 'ligolo';
+export type AgentEngine = 'ssh';
 export type AgentStatus = 'pending' | 'online' | 'offline' | 'retired';
 
 export interface Agent {
@@ -85,12 +85,7 @@ export type AgentWritePayload = Partial<
   >
 >;
 
-export type TunnelKind =
-  | 'ssh_local'
-  | 'ssh_dynamic'
-  | 'ssh_remote'
-  | 'ssh_remote_dynamic'
-  | 'ligolo_tun';
+export type TunnelKind = 'ssh_local' | 'ssh_dynamic' | 'ssh_remote' | 'ssh_remote_dynamic';
 
 export type TunnelDesiredState = 'up' | 'down';
 
@@ -102,30 +97,6 @@ export type TunnelStatus =
   | 'stopping'
   | 'stopped'
   | 'failed';
-
-export interface Route {
-  id: number;
-  tunnel: number;
-  cidr: string;
-  interface_name: string;
-  status: string;
-  desired_state: string;
-  discovered: boolean;
-  last_error: string;
-}
-
-export interface Listener {
-  id: number;
-  tunnel: number;
-  label: string;
-  bind_host: string;
-  bind_port: number;
-  to_host: string;
-  to_port: number;
-  protocol: string;
-  status: string;
-  last_error: string;
-}
 
 export interface Tunnel {
   id: number;
@@ -148,8 +119,6 @@ export interface Tunnel {
   created_at: string;
   created_by_name: string;
   uptime_seconds: number | null;
-  routes: Route[];
-  listeners: Listener[];
 }
 
 export interface TunnelCreatePayload {
@@ -220,6 +189,44 @@ export interface Service {
   banner: string;
   scan?: number;
   target?: string;
+}
+
+// Pivot map — reachability discovered by scanning through SOCKS pivots (SSH -D),
+// not assumed from a routed subnet. Evidence, not assumption.
+
+export interface ReachableHost {
+  host: string;
+  hostname: string;
+  open_ports: number[];
+}
+
+export interface PivotEntry {
+  tunnel: number;
+  label: string;
+  subnets: string[];
+  hosts: ReachableHost[];
+}
+
+export interface PivotMap {
+  engagement: number;
+  total_hosts: number;
+  direct: ReachableHost[];
+  pivots: PivotEntry[];
+}
+
+export interface ReachableResponse {
+  tunnel: number;
+  subnets: string[];
+  hosts: ReachableHost[];
+}
+
+export interface ProxychainsConfig {
+  config: string;
+}
+
+export interface AutoExposeResponse {
+  created: Tunnel[];
+  count: number;
 }
 
 export type AuditResult = 'success' | 'denied' | 'error';
@@ -300,3 +307,16 @@ export type WsMessage =
   | WsAgentUpdated
   | WsEngineStatus
   | WsPong;
+
+export interface DemoCredentials {
+  username: string;
+  password: string;
+}
+
+export interface Bootstrap {
+  /** Populated only on a loopback-only deployment. Null everywhere else. */
+  demo_credentials: DemoCredentials | null;
+  /** True when credentials were configured but withheld because the
+   *  deployment is reachable beyond loopback. */
+  demo_suppressed: boolean;
+}

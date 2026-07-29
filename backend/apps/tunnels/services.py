@@ -26,14 +26,7 @@ from apps.audit.services import record, record_denial
 from apps.engagements.models import Engagement
 from apps.engagements.scope import ScopeViolation
 from apps.engine.specs import SpecError, parse_spec
-from apps.tunnels.models import (
-    DesiredState,
-    Listener,
-    Route,
-    Tunnel,
-    TunnelKind,
-    TunnelStatus,
-)
+from apps.tunnels.models import DesiredState, Tunnel, TunnelKind, TunnelStatus
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +45,6 @@ SCOPED_HOST_FIELDS: dict[str, tuple[str, ...]] = {
     TunnelKind.SSH_DYNAMIC: ("endpoint.host",),
     TunnelKind.SSH_REMOTE: ("endpoint.host",),
     TunnelKind.SSH_REMOTE_DYNAMIC: ("endpoint.host",),
-    TunnelKind.LIGOLO_TUN: (),
 }
 
 
@@ -193,94 +185,3 @@ def request_start(tunnel: Tunnel, *, operator=None) -> Tunnel:
     return tunnel
 
 
-def add_route(tunnel: Tunnel, cidr: str, *, operator=None, discovered: bool = False) -> Route:
-    """Route a subnet through a tunnel, after checking it is in scope."""
-    _require_mutation(operator)
-
-    try:
-        network = tunnel.engagement.check_network(cidr)
-    except ScopeViolation as exc:
-        record_denial(
-            AuditAction.SCOPE_DENIED,
-            str(exc),
-            engagement=tunnel.engagement,
-            payload={"cidr": cidr, "tunnel_id": tunnel.pk},
-        )
-        raise
-
-    with transaction.atomic():
-        route = Route.objects.create(
-            tunnel=tunnel,
-            cidr=str(network),
-            desired_state=DesiredState.UP,
-            discovered=discovered,
-            created_by=operator,
-        )
-        record(
-            AuditAction.ROUTE_ADDED,
-            engagement=tunnel.engagement,
-            obj=route,
-            message=f"Route {network} via {tunnel}",
-        )
-    return route
-
-
-@transaction.atomic
-def remove_route(route: Route, *, operator=None) -> Route:
-    _require_mutation(operator)
-    route.desired_state = DesiredState.DOWN
-    route.save(update_fields=["desired_state", "updated_at"])
-    record(AuditAction.ROUTE_REMOVED, engagement=route.tunnel.engagement, obj=route)
-    return route
-
-
-def add_listener(
-    tunnel: Tunnel,
-    *,
-    bind_host: str,
-    bind_port: int,
-    to_host: str,
-    to_port: int,
-    protocol: str = Listener.Protocol.TCP,
-    operator=None,
-    label: str = "",
-) -> Listener:
-    """Bind a port on the agent side and relay it back through the tunnel."""
-    _require_mutation(operator)
-
-    # bind_host lives on the agent, inside the client network, so it is scoped.
-    # to_host is reached from the operator's side and is not.
-    try:
-        tunnel.engagement.check_host(bind_host)
-    except ScopeViolation as exc:
-        record_denial(
-            AuditAction.SCOPE_DENIED,
-            str(exc),
-            engagement=tunnel.engagement,
-            payload={"bind_host": bind_host, "tunnel_id": tunnel.pk},
-        )
-        raise
-
-    with transaction.atomic():
-        listener = Listener.objects.create(
-            tunnel=tunnel,
-            label=label,
-            bind_host=bind_host,
-            bind_port=bind_port,
-            to_host=to_host,
-            to_port=to_port,
-            protocol=protocol,
-            desired_state=DesiredState.UP,
-            created_by=operator,
-        )
-        record(AuditAction.LISTENER_ADDED, engagement=tunnel.engagement, obj=listener)
-    return listener
-
-
-@transaction.atomic
-def remove_listener(listener: Listener, *, operator=None) -> Listener:
-    _require_mutation(operator)
-    listener.desired_state = DesiredState.DOWN
-    listener.save(update_fields=["desired_state", "updated_at"])
-    record(AuditAction.LISTENER_REMOVED, engagement=listener.tunnel.engagement, obj=listener)
-    return listener

@@ -1,26 +1,23 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  addListener,
-  addRoute,
-  deleteListener,
-  deleteRoute,
+  autoExpose,
   fetchTunnelLogs,
+  getProxychains,
+  getReachable,
   startTunnel,
   stopTunnel,
   useTunnel,
 } from '../api/hooks';
 import { ApiError } from '../api/client';
 import { useSocketSubscription } from '../context/SocketContext';
-import type { Listener, LogLevel, Route, TunnelLog } from '../api/types';
+import type { LogLevel, ReachableResponse, TunnelLog } from '../api/types';
 import { Badge } from '../components/Badge';
-import { Button, IconButton } from '../components/Button';
-import { Field, TextInput, Select } from '../components/Form';
-import { IconArrowRight, IconPlay, IconPlus, IconStop, IconTrash, IconX } from '../components/icons';
+import { Button } from '../components/Button';
+import { IconArrowRight, IconPlay, IconStop } from '../components/icons';
 import { SkeletonBlock } from '../components/Skeleton';
 import { StatusDot, tunnelStatusTone } from '../components/StatusDot';
 import { formatAbsoluteTime, formatDuration } from '../utils/time';
-import { isValidCidr } from '../utils/cidr';
 
 const LEVEL_COLOR: Record<string, string> = {
   debug: 'var(--text-muted)',
@@ -211,8 +208,12 @@ export function TunnelDetail() {
 
         <section className="flex flex-col gap-4 overflow-y-auto pr-1">
           <MetadataCard tunnel={tunnel} />
-          <RoutesCard tunnelId={tunnel.id} routes={tunnel.routes} onChange={reload} />
-          <ListenersCard tunnelId={tunnel.id} listeners={tunnel.listeners} onChange={reload} />
+          {tunnel.kind === 'ssh_dynamic' && (
+            <>
+              <ReachableCard tunnelId={tunnel.id} />
+              <ProxychainsCard tunnelId={tunnel.id} />
+            </>
+          )}
         </section>
       </div>
     </div>
@@ -255,210 +256,160 @@ function MetadataCard({ tunnel }: { tunnel: NonNullable<ReturnType<typeof useTun
   );
 }
 
-function RoutesCard({
-  tunnelId,
-  routes,
-  onChange,
-}: {
-  tunnelId: number;
-  routes: Route[];
-  onChange: () => void;
-}) {
-  const [draft, setDraft] = useState('');
+function ReachableCard({ tunnelId }: { tunnelId: number }) {
+  const [data, setData] = useState<ReachableResponse | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [includeSensitive, setIncludeSensitive] = useState(false);
+  const [exposing, setExposing] = useState(false);
+  const [exposeCount, setExposeCount] = useState<number | null>(null);
 
-  async function handleAdd() {
-    if (!isValidCidr(draft.trim())) {
-      setError('Enter a valid CIDR, e.g. 10.0.0.0/24');
-      return;
-    }
-    setSubmitting(true);
+  const load = useCallback(() => {
+    setLoading(true);
+    getReachable(tunnelId)
+      .then((res) => {
+        setData(res);
+        setError(null);
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.detail : 'Failed to load reachable hosts.'))
+      .finally(() => setLoading(false));
+  }, [tunnelId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleExposeAll() {
+    setExposing(true);
     setError(null);
+    setExposeCount(null);
     try {
-      await addRoute(tunnelId, draft.trim());
-      setDraft('');
-      onChange();
+      const res = await autoExpose(tunnelId, { include_sensitive: includeSensitive });
+      setExposeCount(res.count);
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : 'Failed to add route.');
+      setError(err instanceof ApiError ? err.detail : 'Failed to auto-expose services.');
     } finally {
-      setSubmitting(false);
+      setExposing(false);
     }
-  }
-
-  async function handleRemove(routeId: number) {
-    await deleteRoute(routeId);
-    onChange();
   }
 
   return (
     <div className="rounded-lg border border-border-subtle p-4">
-      <h2 className="mb-3 text-xs font-medium text-text-muted">Routes</h2>
-      <ul className="flex flex-col gap-1.5">
-        {routes.length === 0 && <li className="text-sm text-text-muted">No routes.</li>}
-        {routes.map((route) => (
-          <li
-            key={route.id}
-            className="flex items-center justify-between rounded-md border border-border-subtle px-2.5 py-1.5"
-          >
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-sm text-text-primary">{route.cidr}</span>
-              {route.discovered && <Badge tone="info">discovered</Badge>}
-              <span className="text-xs text-text-muted">{route.status}</span>
+      <h2 className="mb-3 text-xs font-medium text-text-muted">Reachable through this pivot</h2>
+
+      {loading ? (
+        <SkeletonBlock className="h-16 w-full" />
+      ) : !data || (data.subnets.length === 0 && data.hosts.length === 0) ? (
+        <p className="text-sm text-text-muted">
+          Nothing found yet. Run an nmap scan through this tunnel to discover what's reachable.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div>
+            <div className="mb-1.5 text-xs font-medium text-text-muted">Subnets opened</div>
+            <div className="flex flex-wrap gap-1">
+              {data.subnets.map((cidr) => (
+                <Badge key={cidr} mono>
+                  {cidr}
+                </Badge>
+              ))}
             </div>
-            <IconButton aria-label={`Remove route ${route.cidr}`} onClick={() => handleRemove(route.id)}>
-              <IconTrash />
-            </IconButton>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-3 flex items-start gap-2">
-        <div className="flex-1">
-          <TextInput
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              setError(null);
-            }}
-            placeholder="10.0.0.0/24"
-            mono
-            className="w-full"
-          />
-          {error && <div className="mt-1 text-xs text-error">{error}</div>}
+          </div>
+          <ul className="flex flex-col gap-1.5">
+            {data.hosts.map((host) => (
+              <li key={host.host} className="rounded-md border border-border-subtle px-2.5 py-1.5">
+                <div className="font-mono text-sm text-text-primary">
+                  {host.host} {host.hostname && <span className="text-text-muted">({host.hostname})</span>}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {host.open_ports.map((port) => (
+                    <Badge key={port} mono>
+                      {port}
+                    </Badge>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
-        <Button size="sm" onClick={handleAdd} disabled={submitting || !draft.trim()}>
-          <IconPlus /> Add
+      )}
+
+      {error && <div className="mt-3 text-xs text-error">{error}</div>}
+      {exposeCount !== null && (
+        <div className="mt-3 text-xs text-ok">
+          Exposed {exposeCount} service{exposeCount === 1 ? '' : 's'} as local port-forwards.
+        </div>
+      )}
+
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-border-subtle pt-3">
+        <label className="flex items-center gap-2 text-xs text-text-secondary">
+          <input
+            type="checkbox"
+            checked={includeSensitive}
+            onChange={(e) => setIncludeSensitive(e.target.checked)}
+            style={{ accentColor: 'var(--accent)' }}
+          />
+          Include sensitive ports (22, 3389, 5985, 623 are skipped by default)
+        </label>
+        <Button
+          size="sm"
+          variant="primary"
+          onClick={handleExposeAll}
+          disabled={exposing || !data || data.hosts.length === 0}
+        >
+          {exposing ? 'Exposing…' : 'Expose all'}
         </Button>
       </div>
     </div>
   );
 }
 
-const PROTOCOLS = ['tcp', 'udp'];
-
-function ListenersCard({
-  tunnelId,
-  listeners,
-  onChange,
-}: {
-  tunnelId: number;
-  listeners: Listener[];
-  onChange: () => void;
-}) {
-  const [showForm, setShowForm] = useState(false);
-  const [label, setLabel] = useState('');
-  const [bindHost, setBindHost] = useState('127.0.0.1');
-  const [bindPort, setBindPort] = useState('');
-  const [toHost, setToHost] = useState('');
-  const [toPort, setToPort] = useState('');
-  const [protocol, setProtocol] = useState('tcp');
+function ProxychainsCard({ tunnelId }: { tunnelId: number }) {
+  const [config, setConfig] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  async function handleAdd() {
-    if (!bindPort || !toHost || !toPort) {
-      setError('Bind port, target host, and target port are required.');
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      await addListener(tunnelId, {
-        label: label.trim() || `listener-${bindPort}`,
-        bind_host: bindHost.trim() || '127.0.0.1',
-        bind_port: Number(bindPort),
-        to_host: toHost.trim(),
-        to_port: Number(toPort),
-        protocol,
-      });
-      setShowForm(false);
-      setLabel('');
-      setBindPort('');
-      setToHost('');
-      setToPort('');
-      onChange();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : 'Failed to add listener.');
-    } finally {
-      setSubmitting(false);
-    }
-  }
+  useEffect(() => {
+    setLoading(true);
+    getProxychains(tunnelId)
+      .then((res) => {
+        setConfig(res.config);
+        setError(null);
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.detail : 'Failed to load proxychains config.'))
+      .finally(() => setLoading(false));
+  }, [tunnelId]);
 
-  async function handleRemove(listenerId: number) {
-    await deleteListener(listenerId);
-    onChange();
+  async function handleCopy() {
+    if (!config) return;
+    await navigator.clipboard.writeText(config);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   return (
     <div className="rounded-lg border border-border-subtle p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-xs font-medium text-text-muted">Listeners</h2>
-        {!showForm && (
-          <IconButton aria-label="Add listener" onClick={() => setShowForm(true)}>
-            <IconPlus />
-          </IconButton>
+        <h2 className="text-xs font-medium text-text-muted">proxychains</h2>
+        {config && (
+          <Button size="sm" onClick={handleCopy}>
+            {copied ? 'Copied' : 'Copy'}
+          </Button>
         )}
       </div>
-      <ul className="flex flex-col gap-1.5">
-        {listeners.length === 0 && <li className="text-sm text-text-muted">No listeners.</li>}
-        {listeners.map((listener) => (
-          <li
-            key={listener.id}
-            className="flex items-center justify-between rounded-md border border-border-subtle px-2.5 py-1.5"
-          >
-            <div className="flex flex-col">
-              <span className="text-sm text-text-primary">{listener.label}</span>
-              <span className="font-mono text-xs text-text-secondary">
-                {listener.bind_host}:{listener.bind_port} → {listener.to_host}:{listener.to_port} (
-                {listener.protocol})
-              </span>
-            </div>
-            <IconButton aria-label={`Remove listener ${listener.label}`} onClick={() => handleRemove(listener.id)}>
-              <IconTrash />
-            </IconButton>
-          </li>
-        ))}
-      </ul>
 
-      {showForm && (
-        <div className="mt-3 flex flex-col gap-2 rounded-md border border-border-subtle p-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-text-muted">New listener</span>
-            <IconButton aria-label="Cancel new listener" onClick={() => setShowForm(false)}>
-              <IconX />
-            </IconButton>
-          </div>
-          <Field label="Label">
-            <TextInput value={label} onChange={(e) => setLabel(e.target.value)} mono />
-          </Field>
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="Bind host">
-              <TextInput value={bindHost} onChange={(e) => setBindHost(e.target.value)} mono />
-            </Field>
-            <Field label="Bind port">
-              <TextInput value={bindPort} onChange={(e) => setBindPort(e.target.value)} mono inputMode="numeric" />
-            </Field>
-            <Field label="Target host">
-              <TextInput value={toHost} onChange={(e) => setToHost(e.target.value)} mono />
-            </Field>
-            <Field label="Target port">
-              <TextInput value={toPort} onChange={(e) => setToPort(e.target.value)} mono inputMode="numeric" />
-            </Field>
-          </div>
-          <Field label="Protocol">
-            <Select value={protocol} onChange={(e) => setProtocol(e.target.value)}>
-              {PROTOCOLS.map((p) => (
-                <option key={p} value={p}>
-                  {p.toUpperCase()}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          {error && <div className="text-xs text-error">{error}</div>}
-          <Button size="sm" variant="primary" onClick={handleAdd} disabled={submitting}>
-            Add listener
-          </Button>
-        </div>
+      {loading ? (
+        <SkeletonBlock className="h-16 w-full" />
+      ) : error ? (
+        <div className="text-xs text-error">{error}</div>
+      ) : (
+        <>
+          <pre className="overflow-x-auto whitespace-pre-wrap rounded-md border border-border-subtle bg-[var(--bg-base)] p-3 font-mono text-xs text-text-primary">
+            {config}
+          </pre>
+          <p className="mt-2 font-mono text-xs text-text-muted">proxychains4 -f mudale.conf nmap -sT -Pn &lt;target&gt;</p>
+        </>
       )}
     </div>
   );

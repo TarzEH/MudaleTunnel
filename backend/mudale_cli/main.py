@@ -6,7 +6,9 @@
     mudale tunnel create --engagement 1 --kind ssh_dynamic --ssh-user opsec \\
         --ssh-host 10.4.0.10 --local-port 1080
     mudale tunnel logs 3 --follow
-    mudale scan run --engagement 1 --target 10.4.9.0/24 --profile quick --wait
+    mudale scan run --engagement 1 --target 10.4.9.0/24 --via-tunnel 3 --wait
+    mudale pivot map --engagement 1
+    mudale pivot expose 42
 
 Everything here goes through the REST API, so a tunnel opened from the terminal
 shows up in the dashboard the moment it is created — same writes, same policy
@@ -284,9 +286,76 @@ def cmd_tunnel_logs(args) -> int:
         time.sleep(POLL_INTERVAL)
 
 
-def cmd_route_add(args) -> int:
-    route = Client().post(f"/tunnels/{args.id}/routes/", {"cidr": args.cidr})
-    output.success(f"Route {route['cidr']} added to tunnel {args.id}")
+def cmd_pivot_map(args) -> int:
+    """Show what is reachable and through which pivot."""
+    client = Client()
+    data = client.get("/pivot/map/", {"engagement": args.engagement})
+
+    if args.json:
+        output.print_json(data)
+        return EXIT_OK
+
+    print(f"{data['total_hosts']} hosts reachable\n")
+
+    if data["direct"]:
+        print(output.paint("direct", "bold"))
+        for host in data["direct"]:
+            ports = ", ".join(str(p) for p in host["open_ports"])
+            print(f"  {host['host']:<16} {ports}")
+        print()
+
+    for entry in data["pivots"]:
+        header = f"via tunnel {entry['tunnel']} — {entry['label']}"
+        print(output.paint(header, "bold"))
+        if entry["subnets"]:
+            print(output.paint(f"  opens: {', '.join(entry['subnets'])}", "grey"))
+        for host in entry["hosts"]:
+            ports = ", ".join(str(p) for p in host["open_ports"])
+            name = f" ({host['hostname']})" if host["hostname"] else ""
+            print(f"  {host['host']:<16}{name} {ports}")
+        print()
+
+    if not data["direct"] and not data["pivots"]:
+        print(output.paint("Nothing discovered yet. Run a scan first.", "grey"))
+    return EXIT_OK
+
+
+def cmd_pivot_expose(args) -> int:
+    """Turn a discovered service into a local forward."""
+    tunnel = Client().post(
+        f"/services/{args.service}/expose/",
+        {"local_port": args.local_port, "label": args.label or ""},
+    )
+    output.success(f"Tunnel {tunnel['id']}: {tunnel['description']}")
+    return EXIT_OK
+
+
+def cmd_pivot_auto(args) -> int:
+    """Expose everything a pivot found, in one go."""
+    result = Client().post(
+        f"/tunnels/{args.tunnel}/auto-expose/",
+        {"include_sensitive": args.include_sensitive, "limit": args.limit},
+    )
+    if not result["count"]:
+        print(output.paint("Nothing new to expose.", "grey"))
+        return EXIT_OK
+
+    output.success(f"Exposed {result['count']} services")
+    for tunnel in result["created"]:
+        print(f"  {tunnel['description']}")
+    return EXIT_OK
+
+
+def cmd_pivot_proxychains(args) -> int:
+    """Print a proxychains config for a SOCKS pivot."""
+    config = Client().get(f"/tunnels/{args.tunnel}/proxychains/")["config"]
+    if args.output:
+        with open(args.output, "w") as handle:
+            handle.write(config)
+        output.success(f"Wrote {args.output}")
+        print(output.paint(f"  proxychains4 -f {args.output} nmap -sT -Pn <target>", "grey"))
+        return EXIT_OK
+    print(config, end="")
     return EXIT_OK
 
 
@@ -361,7 +430,7 @@ def _print_services(client: Client, scan_id: int, *, as_json: bool) -> int:
     output.table(
         rows,
         [
-            ("host", "HOST"), ("port", "PORT"), ("state", "STATE"),
+            ("id", "ID"), ("host", "HOST"), ("port", "PORT"), ("state", "STATE"),
             ("service_name", "SERVICE"), ("banner", "VERSION"),
         ],
         empty="No open services found.",
@@ -507,10 +576,34 @@ def build_parser() -> argparse.ArgumentParser:
     tlogs.add_argument("--limit", type=int, default=200)
     tlogs.add_argument("-f", "--follow", action="store_true")
 
-    troute = tunnel_sub.add_parser("route", help="Route a subnet through a tunnel.")
-    troute.set_defaults(handler=cmd_route_add)
-    troute.add_argument("id", type=int)
-    troute.add_argument("--cidr", required=True)
+    # Pivoting
+    pivot_parser = subparsers.add_parser("pivot", help="Work with what a pivot can reach.")
+    pivot_sub = pivot_parser.add_subparsers(dest="subcommand", required=True)
+
+    pmap = pivot_sub.add_parser("map", help="Show reachability, per pivot.")
+    pmap.set_defaults(handler=cmd_pivot_map)
+    pmap.add_argument("--engagement", type=int, required=True)
+
+    pexpose = pivot_sub.add_parser("expose", help="Forward one discovered service locally.")
+    pexpose.set_defaults(handler=cmd_pivot_expose)
+    pexpose.add_argument("service", type=int, help="Service id from `mudale scan services`.")
+    pexpose.add_argument("--local-port", type=int)
+    pexpose.add_argument("--label", default="")
+
+    pauto = pivot_sub.add_parser("auto", help="Forward everything a pivot found.")
+    pauto.set_defaults(handler=cmd_pivot_auto)
+    pauto.add_argument("tunnel", type=int, help="The SOCKS tunnel to expand.")
+    pauto.add_argument("--limit", type=int, default=20)
+    pauto.add_argument(
+        "--include-sensitive",
+        action="store_true",
+        help="Also forward 22/3389/5985/623, which are skipped by default.",
+    )
+
+    pchains = pivot_sub.add_parser("proxychains", help="Emit a proxychains config.")
+    pchains.set_defaults(handler=cmd_pivot_proxychains)
+    pchains.add_argument("tunnel", type=int)
+    pchains.add_argument("-o", "--output", help="Write to a file instead of stdout.")
 
     # Scans
     scans = add("scans", "List scans.", cmd_scans)

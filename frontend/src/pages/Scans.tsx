@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useEngagementContext } from '../context/EngagementContext';
-import { createScan, useScanServices, useScans, useTunnels } from '../api/hooks';
+import { createScan, exposeService, useScanServices, useScans, useTunnels } from '../api/hooks';
 import { ApiError } from '../api/client';
-import type { Scan, ScanProfile, Service } from '../api/types';
+import type { Scan, ScanProfile, Service, Tunnel } from '../api/types';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -13,7 +12,6 @@ import { SkeletonRows } from '../components/Skeleton';
 import { scanStatusTone, StatusDot } from '../components/StatusDot';
 import { useSocketSubscription } from '../context/SocketContext';
 import { formatAbsoluteTime, formatDuration, formatRelativeTime } from '../utils/time';
-import type { TunnelPrefill } from '../components/TunnelFormModal';
 
 const PROFILE_OPTIONS: { value: ScanProfile; label: string }[] = [
   { value: 'discovery', label: 'Discovery (host sweep)' },
@@ -220,7 +218,7 @@ function ScanRow({ scan, expanded, onToggle }: { scan: Scan; expanded: boolean; 
                 {scan.error}
               </div>
             ) : (
-              <ScanServices scanId={scan.id} />
+              <ScanServices scanId={scan.id} viaTunnel={scan.via_tunnel} />
             )}
           </td>
         </tr>
@@ -229,9 +227,12 @@ function ScanRow({ scan, expanded, onToggle }: { scan: Scan; expanded: boolean; 
   );
 }
 
-function ScanServices({ scanId }: { scanId: number }) {
-  const navigate = useNavigate();
+function ScanServices({ scanId, viaTunnel }: { scanId: number; viaTunnel: number | null }) {
   const { items: services, loading } = useScanServices(scanId);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [results, setResults] = useState<
+    Record<number, { ok: true; tunnel: Tunnel } | { ok: false; detail: string }>
+  >({});
 
   const grouped = useMemo(() => {
     const map = new Map<string, Service[]>();
@@ -243,14 +244,19 @@ function ScanServices({ scanId }: { scanId: number }) {
     return Array.from(map.entries());
   }, [services]);
 
-  function createTunnelTo(svc: Service) {
-    const prefill: TunnelPrefill = {
-      label: `to-${svc.host.replace(/[^a-zA-Z0-9-]/g, '-')}-${svc.port}`,
-      kind: 'ssh_local',
-      targetHost: svc.host,
-      targetPort: svc.port,
-    };
-    navigate('/', { state: { prefill } });
+  async function handleExpose(svc: Service) {
+    setBusyId(svc.id);
+    try {
+      const tunnel = await exposeService(svc.id);
+      setResults((r) => ({ ...r, [svc.id]: { ok: true, tunnel } }));
+    } catch (err) {
+      setResults((r) => ({
+        ...r,
+        [svc.id]: { ok: false, detail: err instanceof ApiError ? err.detail : 'Failed to expose service.' },
+      }));
+    } finally {
+      setBusyId(null);
+    }
   }
 
   if (loading) return <div className="text-sm text-text-muted">Loading services…</div>;
@@ -274,26 +280,36 @@ function ScanServices({ scanId }: { scanId: number }) {
               </tr>
             </thead>
             <tbody>
-              {svcs.map((svc) => (
-                <tr key={svc.id} className="border-t border-border-subtle">
-                  <td className="px-2 py-1.5 font-mono text-text-primary">
-                    {svc.port}/{svc.protocol}
-                  </td>
-                  <td className="px-2 py-1.5 text-text-secondary">{svc.state}</td>
-                  <td className="px-2 py-1.5 text-text-secondary">{svc.service_name || '—'}</td>
-                  <td className="px-2 py-1.5 text-text-secondary">
-                    {svc.product} {svc.version}
-                  </td>
-                  <td className="px-2 py-1.5 text-right">
-                    <button
-                      onClick={() => createTunnelTo(svc)}
-                      className="text-accent hover:underline"
-                    >
-                      Create tunnel to this service
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {svcs.map((svc) => {
+                const result = results[svc.id];
+                return (
+                  <tr key={svc.id} className="border-t border-border-subtle">
+                    <td className="px-2 py-1.5 font-mono text-text-primary">
+                      {svc.port}/{svc.protocol}
+                    </td>
+                    <td className="px-2 py-1.5 text-text-secondary">{svc.state}</td>
+                    <td className="px-2 py-1.5 text-text-secondary">{svc.service_name || '—'}</td>
+                    <td className="px-2 py-1.5 text-text-secondary">
+                      {svc.product} {svc.version}
+                    </td>
+                    <td className="px-2 py-1.5 text-right">
+                      {viaTunnel && (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <Button size="sm" onClick={() => handleExpose(svc)} disabled={busyId === svc.id}>
+                            {busyId === svc.id ? 'Exposing…' : 'Expose'}
+                          </Button>
+                          {result && result.ok && (
+                            <span className="font-mono text-[11px] text-ok">
+                              127.0.0.1:{String(result.tunnel.spec?.local_port ?? '?')}
+                            </span>
+                          )}
+                          {result && !result.ok && <span className="text-[11px] text-error">{result.detail}</span>}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

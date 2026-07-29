@@ -1,9 +1,11 @@
 """Agents — a foothold the control plane can route traffic through.
 
-An agent is whatever the far end of a tunnel is: a ligolo-ng agent process on a
-compromised host, or an SSH server we hold credentials for. Modelling both as
-"agent" keeps the dashboard, the audit trail and the topology graph engine-
-agnostic, and lets a single engagement mix engines.
+An agent is a host we can tunnel *through*: today, an SSH server we hold
+credentials for. It is the near end of a pivot — everything nmap proves
+reachable from it becomes the next layer of the network map.
+
+``engine`` is kept as a field even with one value, so the dashboard, audit trail
+and topology stay engine-agnostic if another transport is added later.
 """
 
 from __future__ import annotations
@@ -15,7 +17,6 @@ from django.utils import timezone
 
 class EngineKind(models.TextChoices):
     SSH = "ssh", "SSH"
-    LIGOLO = "ligolo", "ligolo-ng"
 
 
 class AgentStatus(models.TextChoices):
@@ -62,12 +63,13 @@ class Agent(models.Model):
     remote_username = models.CharField(max_length=128, blank=True)
     is_privileged = models.BooleanField(null=True, blank=True)
 
-    # ligolo-ng's own session identifier, so the engine can address the right
-    # session when the proxy holds several.
+    # Identifier the engine uses to address this foothold, when a transport
+    # multiplexes several sessions over one connection.
     engine_session_id = models.CharField(max_length=128, blank=True, db_index=True)
 
-    # Subnets this agent can see, as reported by the agent or discovered by
-    # autoroute. Feeds the topology graph and the pivot-path search.
+    # Subnets proven reachable through this agent by a scan run through it.
+    # Written by apps.scans.services when a tunnelled scan finds live hosts, and
+    # read by the topology graph. Not self-reported by the host — earned.
     reachable_cidrs = models.JSONField(default=list, blank=True)
 
     metadata = models.JSONField(default=dict, blank=True)

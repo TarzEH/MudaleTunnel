@@ -17,6 +17,7 @@ from rest_framework.views import exception_handler as drf_exception_handler
 from apps.engagements.scope import OutOfScope, ScopeViolation, TargetSyntaxError
 from apps.engine.specs import SpecError
 from apps.scans.services import PermissionDenied as ScanPermissionDenied
+from apps.tunnels.pivot import PivotError
 from apps.tunnels.services import PermissionDenied as TunnelPermissionDenied
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,11 @@ def api_exception_handler(exc, context):
         return Response(
             {"detail": str(exc), "code": _scope_code(exc)},
             status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if isinstance(exc, PivotError):
+        return Response(
+            {"detail": str(exc), "code": "pivot_error"}, status=status.HTTP_400_BAD_REQUEST
         )
 
     if isinstance(exc, SpecError):
