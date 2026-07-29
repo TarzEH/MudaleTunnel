@@ -111,7 +111,6 @@ class Supervisor:
         return {
             "ssh": self.ssh.is_available(),
             "nmap": self.nmap.is_available(),
-            "ligolo": bool(self.config.get("LIGOLO_PROXY_BIN")),
         }
 
     def register(self) -> EngineInstance:
@@ -127,11 +126,10 @@ class Supervisor:
             },
         )
         logger.info(
-            "Engine %s registered (ssh=%s nmap=%s ligolo=%s)",
+            "Engine %s registered (ssh=%s nmap=%s)",
             self.instance_id,
             capabilities["ssh"],
             capabilities["nmap"],
-            capabilities["ligolo"],
         )
         return instance
 

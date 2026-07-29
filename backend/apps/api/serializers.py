@@ -16,7 +16,7 @@ from apps.audit.models import AuditEvent
 from apps.engagements.models import Engagement
 from apps.engagements.scope import ScopeViolation, networks_from_strings
 from apps.scans.models import Scan, Service
-from apps.tunnels.models import Listener, Route, Tunnel
+from apps.tunnels.models import Tunnel
 
 # ── Accounts ────────────────────────────────────────────────────────────
 
@@ -81,26 +81,6 @@ class AgentSerializer(serializers.ModelSerializer):
 # ── Tunnels ─────────────────────────────────────────────────────────────
 
 
-class RouteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Route
-        fields = [
-            "id", "tunnel", "cidr", "interface_name", "status",
-            "desired_state", "discovered", "last_error",
-        ]
-        read_only_fields = fields
-
-
-class ListenerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Listener
-        fields = [
-            "id", "tunnel", "label", "bind_host", "bind_port", "to_host",
-            "to_port", "protocol", "status", "last_error",
-        ]
-        read_only_fields = ["id", "tunnel", "status", "last_error"]
-
-
 class TunnelSerializer(serializers.ModelSerializer):
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
     engagement_name = serializers.CharField(source="engagement.name", read_only=True)
@@ -110,8 +90,6 @@ class TunnelSerializer(serializers.ModelSerializer):
     )
     uptime_seconds = serializers.FloatField(read_only=True)
     description = serializers.SerializerMethodField()
-    routes = RouteSerializer(many=True, read_only=True)
-    listeners = ListenerSerializer(many=True, read_only=True)
 
     class Meta:
         model = Tunnel
@@ -120,7 +98,7 @@ class TunnelSerializer(serializers.ModelSerializer):
             "kind", "kind_display", "label", "description", "desired_state",
             "status", "spec", "pid", "last_error", "restart_count",
             "started_at", "stopped_at", "created_at", "created_by_name",
-            "uptime_seconds", "routes", "listeners",
+            "uptime_seconds",
         ]
         read_only_fields = fields
 
@@ -132,15 +110,11 @@ class TunnelSerializer(serializers.ModelSerializer):
         """
         from apps.engine.adapters.ssh import SshAdapter
         from apps.engine.specs import SpecError, parse_spec
-        from apps.tunnels.models import TunnelKind
 
         try:
             spec = parse_spec(tunnel.kind, tunnel.spec)
         except SpecError:
             return tunnel.get_kind_display()
-
-        if tunnel.kind == TunnelKind.LIGOLO_TUN:
-            return f"{spec.interface_name} → session {spec.session_id}"
 
         try:
             adapter = SshAdapter("ssh")
@@ -160,21 +134,6 @@ class TunnelCreateSerializer(serializers.Serializer):
     agent = serializers.PrimaryKeyRelatedField(
         queryset=Agent.objects.all(), required=False, allow_null=True
     )
-
-
-class RouteCreateSerializer(serializers.Serializer):
-    cidr = serializers.CharField(max_length=64)
-
-
-class ListenerCreateSerializer(serializers.Serializer):
-    bind_host = serializers.CharField(max_length=253)
-    bind_port = serializers.IntegerField(min_value=1, max_value=65535)
-    to_host = serializers.CharField(max_length=253)
-    to_port = serializers.IntegerField(min_value=1, max_value=65535)
-    protocol = serializers.ChoiceField(
-        choices=Listener.Protocol.choices, default=Listener.Protocol.TCP
-    )
-    label = serializers.CharField(required=False, allow_blank=True, default="", max_length=128)
 
 
 class TunnelLogSerializer(serializers.Serializer):

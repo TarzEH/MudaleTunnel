@@ -24,11 +24,7 @@ from apps.api.serializers import (
     AgentSerializer,
     AuditEventSerializer,
     EngagementSerializer,
-    ListenerCreateSerializer,
-    ListenerSerializer,
     MeSerializer,
-    RouteCreateSerializer,
-    RouteSerializer,
     ScanCreateSerializer,
     ScanSerializer,
     ServiceSerializer,
@@ -42,8 +38,9 @@ from apps.audit.services import record
 from apps.engagements.models import Engagement
 from apps.scans import services as scan_services
 from apps.scans.models import Scan, Service
+from apps.tunnels import pivot
 from apps.tunnels import services as tunnel_services
-from apps.tunnels.models import Listener, Route, Tunnel, TunnelLog
+from apps.tunnels.models import Tunnel, TunnelLog
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +148,7 @@ class AgentViewSet(EngagementScopedMixin, viewsets.ModelViewSet):
 class TunnelViewSet(EngagementScopedMixin, viewsets.ModelViewSet):
     queryset = (
         Tunnel.objects.select_related("engagement", "agent", "created_by")
-        .prefetch_related("routes", "listeners")
+        .prefetch_related("logs")
         .order_by("-created_at")
     )
     serializer_class = TunnelSerializer
@@ -204,23 +201,50 @@ class TunnelViewSet(EngagementScopedMixin, viewsets.ModelViewSet):
         # Oldest first, so the dashboard can append without reversing.
         return Response({"results": TunnelLogSerializer(reversed(list(logs)), many=True).data})
 
-    @action(detail=True, methods=["post"], url_path="routes")
-    def add_route(self, request, pk=None):
-        payload = RouteCreateSerializer(data=request.data)
-        payload.is_valid(raise_exception=True)
-        route = tunnel_services.add_route(
-            self.get_object(), payload.validated_data["cidr"], operator=request.user
-        )
-        return Response(RouteSerializer(route).data, status=status.HTTP_201_CREATED)
+    # ── Pivoting ────────────────────────────────────────────────────────
 
-    @action(detail=True, methods=["post"], url_path="listeners")
-    def add_listener(self, request, pk=None):
-        payload = ListenerCreateSerializer(data=request.data)
-        payload.is_valid(raise_exception=True)
-        listener = tunnel_services.add_listener(
-            self.get_object(), operator=request.user, **payload.validated_data
+    @action(detail=True, methods=["get"])
+    def proxychains(self, request, pk=None):
+        """A ready-to-use proxychains config for this SOCKS pivot."""
+        return Response({"config": pivot.proxychains_config(self.get_object())})
+
+    @action(detail=True, methods=["get"])
+    def reachable(self, request, pk=None):
+        """What this pivot has been proven to reach, from scans run through it."""
+        tunnel = self.get_object()
+        pivot_map = pivot.build_map(tunnel.engagement)
+        hosts = pivot_map.by_tunnel.get(tunnel.pk, [])
+        return Response(
+            {
+                "tunnel": tunnel.pk,
+                "subnets": pivot_map.subnets_by_tunnel.get(tunnel.pk, []),
+                "hosts": [
+                    {
+                        "host": host.host,
+                        "hostname": host.hostname,
+                        "open_ports": host.open_ports,
+                    }
+                    for host in hosts
+                ],
+            }
         )
-        return Response(ListenerSerializer(listener).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="auto-expose")
+    def auto_expose(self, request, pk=None):
+        """Turn everything this pivot found into local forwards."""
+        tunnel = self.get_object()
+        created = pivot.auto_expose(
+            tunnel.engagement,
+            tunnel=tunnel,
+            operator=request.user,
+            ports=request.data.get("ports"),
+            include_sensitive=bool(request.data.get("include_sensitive")),
+            limit=int(request.data.get("limit", 20)),
+        )
+        return Response(
+            {"created": TunnelSerializer(created, many=True).data, "count": len(created)},
+            status=status.HTTP_201_CREATED,
+        )
 
     def _require_visible(self, engagement: Engagement) -> Engagement:
         if not Engagement.objects.visible_to(self.request.user).filter(pk=engagement.pk).exists():
@@ -228,40 +252,6 @@ class TunnelViewSet(EngagementScopedMixin, viewsets.ModelViewSet):
 
             raise DRFPermissionDenied("You are not a member of that engagement.")
         return engagement
-
-
-class RouteViewSet(
-    viewsets.GenericViewSet, viewsets.mixins.RetrieveModelMixin, viewsets.mixins.DestroyModelMixin
-):
-    queryset = Route.objects.select_related("tunnel__engagement")
-    serializer_class = RouteSerializer
-    permission_classes = [IsOperatorOrReadOnly]
-
-    def get_queryset(self):
-        return self.queryset.filter(
-            tunnel__engagement__in=Engagement.objects.visible_to(self.request.user)
-        )
-
-    def destroy(self, request, *args, **kwargs):
-        route = tunnel_services.remove_route(self.get_object(), operator=request.user)
-        return Response(RouteSerializer(route).data)
-
-
-class ListenerViewSet(
-    viewsets.GenericViewSet, viewsets.mixins.RetrieveModelMixin, viewsets.mixins.DestroyModelMixin
-):
-    queryset = Listener.objects.select_related("tunnel__engagement")
-    serializer_class = ListenerSerializer
-    permission_classes = [IsOperatorOrReadOnly]
-
-    def get_queryset(self):
-        return self.queryset.filter(
-            tunnel__engagement__in=Engagement.objects.visible_to(self.request.user)
-        )
-
-    def destroy(self, request, *args, **kwargs):
-        listener = tunnel_services.remove_listener(self.get_object(), operator=request.user)
-        return Response(ListenerSerializer(listener).data)
 
 
 # ── Scans ───────────────────────────────────────────────────────────────
@@ -300,11 +290,62 @@ class ScanViewSet(EngagementScopedMixin, viewsets.ModelViewSet):
 
 
 class ServiceViewSet(EngagementScopedMixin, viewsets.ReadOnlyModelViewSet):
-    queryset = Service.objects.select_related("scan").order_by("host", "port")
+    queryset = Service.objects.select_related("scan", "scan__via_tunnel").order_by("host", "port")
     serializer_class = ServiceSerializer
     permission_classes = [IsOperatorOrReadOnly]
     filterset_fields = ["engagement", "scan", "protocol", "state", "port"]
     search_fields = ["host", "hostname", "service_name", "product"]
+
+    @action(detail=True, methods=["post"])
+    def expose(self, request, pk=None):
+        """Create a local forward to this service, through the pivot that found it.
+
+        The payoff of scanning through a tunnel: nmap proves 10.4.9.5:1433 is
+        reachable from the jump host, and this turns that into a localhost port
+        without anyone composing an ssh command.
+        """
+        tunnel = pivot.expose_service(
+            self.get_object(),
+            operator=request.user,
+            local_port=request.data.get("local_port"),
+            label=request.data.get("label", ""),
+        )
+        return Response(TunnelSerializer(tunnel).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def pivot_map(request):
+    """The engagement's reachability graph, as evidenced by scans."""
+    engagement_id = request.query_params.get("engagement")
+    engagement = Engagement.objects.visible_to(request.user).filter(pk=engagement_id).first()
+    if engagement is None:
+        return Response({"detail": "Engagement not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    result = pivot.build_map(engagement)
+
+    def render(hosts):
+        return [
+            {"host": h.host, "hostname": h.hostname, "open_ports": h.open_ports}
+            for h in hosts
+        ]
+
+    return Response(
+        {
+            "engagement": engagement.pk,
+            "total_hosts": result.total_hosts,
+            "direct": render(result.direct),
+            "pivots": [
+                {
+                    "tunnel": tunnel_id,
+                    "label": hosts[0].via_label if hosts else "",
+                    "subnets": result.subnets_by_tunnel.get(tunnel_id, []),
+                    "hosts": render(hosts),
+                }
+                for tunnel_id, hosts in result.by_tunnel.items()
+            ],
+        }
+    )
 
 
 # ── Audit ───────────────────────────────────────────────────────────────
@@ -407,6 +448,26 @@ def engine_status(request):
                 }
                 for instance in instances
             ],
+        }
+    )
+
+
+@api_view(["GET"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def bootstrap(request):
+    """Everything the sign-in screen needs before anyone has authenticated.
+
+    Deliberately tiny. The only thing it can disclose is demo credentials, and
+    settings only populate those on a loopback-only deployment — see
+    ``DEMO_CREDENTIALS`` in the settings module.
+    """
+    from django.conf import settings as django_settings
+
+    return Response(
+        {
+            "demo_credentials": django_settings.DEMO_CREDENTIALS,
+            "demo_suppressed": django_settings.DEMO_CREDENTIALS_SUPPRESSED,
         }
     )
 

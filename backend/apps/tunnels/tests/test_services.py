@@ -6,7 +6,7 @@ import pytest
 
 from apps.accounts.models import Role
 from apps.audit.models import AuditAction, AuditEvent, AuditResult
-from apps.engagements.scope import OutOfScope, ScopeViolation, TargetSyntaxError
+from apps.engagements.scope import OutOfScope, ScopeViolation
 from apps.engine.specs import SpecError
 from apps.tunnels import services
 from apps.tunnels.models import DesiredState, Tunnel, TunnelKind, TunnelStatus
@@ -217,62 +217,3 @@ def test_restart_rechecks_scope_against_the_current_engagement(engagement, opera
         services.request_start(tunnel, operator=operator)
 
 
-# ── Routes ──────────────────────────────────────────────────────────────
-
-
-def test_route_in_scope_is_added(engagement, operator):
-    tunnel = services.create_tunnel(
-        engagement=engagement, kind=TunnelKind.SSH_LOCAL, spec=local_spec(), operator=operator
-    )
-    route = services.add_route(tunnel, "10.4.9.0/24", operator=operator)
-    assert route.cidr == "10.4.9.0/24"
-
-
-def test_route_outside_scope_is_refused(engagement, operator):
-    tunnel = services.create_tunnel(
-        engagement=engagement, kind=TunnelKind.SSH_LOCAL, spec=local_spec(), operator=operator
-    )
-    with pytest.raises(OutOfScope):
-        services.add_route(tunnel, "172.16.0.0/16", operator=operator)
-
-
-def test_route_supernet_of_scope_is_refused(engagement, operator):
-    """Routing 10.0.0.0/8 would pull the client's whole private space in."""
-    tunnel = services.create_tunnel(
-        engagement=engagement, kind=TunnelKind.SSH_LOCAL, spec=local_spec(), operator=operator
-    )
-    with pytest.raises(OutOfScope):
-        services.add_route(tunnel, "10.0.0.0/8", operator=operator)
-
-
-def test_flag_shaped_route_is_refused(engagement, operator):
-    tunnel = services.create_tunnel(
-        engagement=engagement, kind=TunnelKind.SSH_LOCAL, spec=local_spec(), operator=operator
-    )
-    with pytest.raises(TargetSyntaxError):
-        services.add_route(tunnel, "--datadir=/tmp", operator=operator)
-
-
-# ── Listeners ───────────────────────────────────────────────────────────
-
-
-def test_listener_bind_host_is_scope_checked(engagement, operator):
-    tunnel = services.create_tunnel(
-        engagement=engagement, kind=TunnelKind.SSH_LOCAL, spec=local_spec(), operator=operator
-    )
-    with pytest.raises(OutOfScope):
-        services.add_listener(
-            tunnel, bind_host="8.8.8.8", bind_port=9000,
-            to_host="127.0.0.1", to_port=8000, operator=operator,
-        )
-
-
-def test_listener_in_scope_is_created(engagement, operator):
-    tunnel = services.create_tunnel(
-        engagement=engagement, kind=TunnelKind.SSH_LOCAL, spec=local_spec(), operator=operator
-    )
-    listener = services.add_listener(
-        tunnel, bind_host="10.4.0.10", bind_port=9000,
-        to_host="127.0.0.1", to_port=8000, operator=operator,
-    )
-    assert listener.bind_port == 9000

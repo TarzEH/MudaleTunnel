@@ -3,16 +3,84 @@ import { createTunnel, useAgents } from '../api/hooks';
 import { ApiError } from '../api/client';
 import type { TunnelKind } from '../api/types';
 import { Button } from './Button';
-import { Field, Select, TextArea, TextInput } from './Form';
+import { Field, Select, TextInput } from './Form';
 import { Modal } from './Modal';
 
-const KIND_OPTIONS: { value: TunnelKind; label: string }[] = [
-  { value: 'ssh_local', label: 'SSH local forward' },
-  { value: 'ssh_dynamic', label: 'SSH dynamic (SOCKS)' },
-  { value: 'ssh_remote', label: 'SSH remote forward' },
-  { value: 'ssh_remote_dynamic', label: 'SSH remote dynamic' },
-  { value: 'ligolo_tun', label: 'Ligolo tun interface' },
+const KIND_OPTIONS: { value: TunnelKind; label: string; hint: string }[] = [
+  {
+    value: 'ssh_dynamic',
+    label: 'SOCKS proxy (-D)',
+    hint: 'The pivot. Open this first, then scan through it to discover what it reaches.',
+  },
+  {
+    value: 'ssh_local',
+    label: 'Local forward (-L)',
+    hint: 'Bring one remote service to a local port.',
+  },
+  {
+    value: 'ssh_remote',
+    label: 'Reverse forward (-R)',
+    hint: 'Expose one of your local services on the remote side.',
+  },
+  {
+    value: 'ssh_remote_dynamic',
+    label: 'Reverse SOCKS (-R)',
+    hint: 'Reverse SOCKS. Needs OpenSSH 7.6+ on both ends.',
+  },
 ];
+
+/**
+ * Which spec fields each kind needs, using the exact names the backend's
+ * pydantic schemas expect. These are validated with `extra="forbid"`, so a
+ * wrong or invented key is rejected outright rather than silently ignored.
+ */
+const SPEC_FIELDS: Record<TunnelKind, SpecField[]> = {
+  ssh_local: ['local_bind', 'local_port', 'target_host', 'target_port'],
+  ssh_dynamic: ['local_bind', 'local_port'],
+  ssh_remote: ['remote_bind', 'remote_port', 'target_host', 'target_port'],
+  ssh_remote_dynamic: ['remote_bind', 'remote_port'],
+};
+
+type SpecField =
+  | 'local_bind'
+  | 'local_port'
+  | 'remote_bind'
+  | 'remote_port'
+  | 'target_host'
+  | 'target_port';
+
+const FIELD_LABELS: Record<SpecField, string> = {
+  local_bind: 'Local bind',
+  local_port: 'Local port',
+  remote_bind: 'Remote bind',
+  remote_port: 'Remote port',
+  target_host: 'Target host',
+  target_port: 'Target port',
+};
+
+const FIELD_HINTS: Partial<Record<SpecField, string>> = {
+  local_bind: '127.0.0.1 keeps it on this machine. 0.0.0.0 exposes it to your network.',
+  remote_bind: 'Bind address on the remote host. Must be a literal IP.',
+  target_host: 'Must be inside the engagement scope.',
+};
+
+interface SpecState {
+  local_bind: string;
+  local_port: string;
+  remote_bind: string;
+  remote_port: string;
+  target_host: string;
+  target_port: string;
+}
+
+const EMPTY_SPEC: SpecState = {
+  local_bind: '127.0.0.1',
+  local_port: '',
+  remote_bind: '127.0.0.1',
+  remote_port: '',
+  target_host: '',
+  target_port: '',
+};
 
 export interface TunnelPrefill {
   label?: string;
@@ -30,47 +98,6 @@ interface TunnelFormModalProps {
   prefill?: TunnelPrefill | null;
 }
 
-interface SpecState {
-  listen_host: string;
-  listen_port: string;
-  target_host: string;
-  target_port: string;
-  cidr: string;
-}
-
-const EMPTY_SPEC: SpecState = {
-  listen_host: '127.0.0.1',
-  listen_port: '',
-  target_host: '',
-  target_port: '',
-  cidr: '',
-};
-
-function specFieldsForKind(kind: TunnelKind): Array<keyof SpecState> {
-  switch (kind) {
-    case 'ssh_local':
-      return ['listen_host', 'listen_port', 'target_host', 'target_port'];
-    case 'ssh_remote':
-      return ['listen_port', 'target_host', 'target_port'];
-    case 'ssh_dynamic':
-      return ['listen_host', 'listen_port'];
-    case 'ssh_remote_dynamic':
-      return ['listen_port'];
-    case 'ligolo_tun':
-      return ['cidr'];
-    default:
-      return [];
-  }
-}
-
-const FIELD_LABELS: Record<keyof SpecState, string> = {
-  listen_host: 'Listen host',
-  listen_port: 'Listen port',
-  target_host: 'Target host',
-  target_port: 'Target port',
-  cidr: 'Routed CIDR',
-};
-
 export function TunnelFormModal({
   open,
   onClose,
@@ -81,9 +108,16 @@ export function TunnelFormModal({
 }: TunnelFormModalProps) {
   const { items: agents } = useAgents(engagementId);
   const [label, setLabel] = useState('');
-  const [description, setDescription] = useState('');
-  const [kind, setKind] = useState<TunnelKind>('ssh_local');
+  const [kind, setKind] = useState<TunnelKind>('ssh_dynamic');
   const [agentId, setAgentId] = useState<string>('');
+
+  // The SSH server that carries the tunnel.
+  const [sshUser, setSshUser] = useState('');
+  const [sshHost, setSshHost] = useState('');
+  const [sshPort, setSshPort] = useState('22');
+  const [identityFile, setIdentityFile] = useState('');
+  const [acceptNewHostKey, setAcceptNewHostKey] = useState(false);
+
   const [spec, setSpec] = useState<SpecState>(EMPTY_SPEC);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,9 +125,13 @@ export function TunnelFormModal({
   useEffect(() => {
     if (!open) return;
     setLabel(prefill?.label ?? '');
-    setDescription('');
-    setKind(prefill?.kind ?? 'ssh_local');
+    setKind(prefill?.kind ?? 'ssh_dynamic');
     setAgentId('');
+    setSshUser('');
+    setSshHost('');
+    setSshPort('22');
+    setIdentityFile('');
+    setAcceptNewHostKey(false);
     setSpec({
       ...EMPTY_SPEC,
       target_host: prefill?.targetHost ?? '',
@@ -102,123 +140,155 @@ export function TunnelFormModal({
     setError(null);
   }, [open, prefill]);
 
-  const visibleFields = specFieldsForKind(kind);
+  const visibleFields = SPEC_FIELDS[kind] ?? [];
+  const selectedKind = KIND_OPTIONS.find((option) => option.value === kind);
 
   async function handleSubmit() {
     setError(null);
-    if (!label.trim()) {
-      setError('Label is required.');
+    if (!sshUser.trim() || !sshHost.trim()) {
+      setError('SSH user and host are required — they are how the tunnel is carried.');
       return;
     }
-    const specPayload: Record<string, unknown> = {};
+
+    const specPayload: Record<string, unknown> = {
+      endpoint: {
+        user: sshUser.trim(),
+        host: sshHost.trim(),
+        port: Number(sshPort) || 22,
+        ...(identityFile.trim() ? { identity_file: identityFile.trim() } : {}),
+        ...(acceptNewHostKey ? { strict_host_key_checking: false } : {}),
+      },
+    };
+
     for (const field of visibleFields) {
       const raw = spec[field];
       if (!raw) continue;
       specPayload[field] = field.endsWith('port') ? Number(raw) : raw;
     }
+
     setSubmitting(true);
     try {
       await createTunnel({
         engagement: engagementId,
         kind,
         label: label.trim(),
-        description: description.trim() || undefined,
         spec: specPayload,
         agent: agentId ? Number(agentId) : undefined,
       });
       onCreated();
       onClose();
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.detail);
-      } else {
-        setError('Failed to create tunnel.');
-      }
+      // Scope refusals arrive here. The message names the rejected target and
+      // what the engagement does allow, so it is shown verbatim.
+      setError(err instanceof ApiError ? err.detail : 'Failed to create tunnel.');
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="New tunnel"
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? 'Creating…' : 'Create tunnel'}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <Field label="Engagement">
-          <TextInput value={engagementName} disabled mono />
-        </Field>
-        <Field label="Label" htmlFor="tunnel-label">
+    <Modal open={open} onClose={onClose} title={`New tunnel — ${engagementName}`}>
+      <div className="space-y-4">
+        <Field label="Label">
           <TextInput
-            id="tunnel-label"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            placeholder="jump-to-dmz"
-            mono
+            placeholder="sql via dmz-jump"
+            autoFocus
           />
         </Field>
-        <Field label="Description (optional)" htmlFor="tunnel-description">
-          <TextArea
-            id="tunnel-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What this tunnel is for"
-          />
-        </Field>
-        <Field label="Kind" htmlFor="tunnel-kind">
-          <Select id="tunnel-kind" value={kind} onChange={(e) => setKind(e.target.value as TunnelKind)}>
-            {KIND_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Agent (optional)" htmlFor="tunnel-agent">
-          <Select id="tunnel-agent" value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-            <option value="">No agent</option>
-            {agents.map((agent) => (
-              <option key={agent.id} value={agent.id}>
-                {agent.name} ({agent.status})
+
+        <Field label="Kind" hint={selectedKind?.hint}>
+          <Select value={kind} onChange={(e) => setKind(e.target.value as TunnelKind)}>
+            {KIND_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </Select>
         </Field>
 
+        <fieldset className="rounded-md border border-subtle p-3">
+          <legend className="px-1 text-xs font-medium text-text-muted">SSH endpoint</legend>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="User">
+              <TextInput value={sshUser} onChange={(e) => setSshUser(e.target.value)} placeholder="opsec" mono />
+            </Field>
+            <Field label="Host">
+              <TextInput value={sshHost} onChange={(e) => setSshHost(e.target.value)} placeholder="10.4.0.10" mono />
+            </Field>
+            <Field label="Port">
+              <TextInput value={sshPort} onChange={(e) => setSshPort(e.target.value)} placeholder="22" mono />
+            </Field>
+            <Field label="Identity file" hint="Absolute path on the engine host.">
+              <TextInput
+                value={identityFile}
+                onChange={(e) => setIdentityFile(e.target.value)}
+                placeholder="/keys/acme.pem"
+                mono
+              />
+            </Field>
+          </div>
+          <label className="mt-3 flex items-center gap-2 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              checked={acceptNewHostKey}
+              onChange={(event) => setAcceptNewHostKey(event.target.checked)}
+              className="accent-accent"
+            />
+            Accept an unknown host key on first connect
+          </label>
+        </fieldset>
+
         {visibleFields.length > 0 && (
-          <div className="rounded-md border border-border-subtle p-3">
-            <div className="mb-3 text-xs font-medium text-text-muted">Spec</div>
+          <fieldset className="rounded-md border border-subtle p-3">
+            <legend className="px-1 text-xs font-medium text-text-muted">Forwarding</legend>
             <div className="grid grid-cols-2 gap-3">
               {visibleFields.map((field) => (
-                <Field key={field} label={FIELD_LABELS[field]} htmlFor={`spec-${field}`}>
+                <Field key={field} label={FIELD_LABELS[field]} hint={FIELD_HINTS[field]}>
                   <TextInput
-                    id={`spec-${field}`}
                     value={spec[field]}
-                    onChange={(e) => setSpec((s) => ({ ...s, [field]: e.target.value }))}
+                    onChange={(e) =>
+                      setSpec((prev) => ({ ...prev, [field]: e.target.value }))
+                    }
                     mono
                   />
                 </Field>
               ))}
             </div>
-          </div>
+          </fieldset>
+        )}
+
+        {agents.length > 0 && (
+          <Field label="Foothold" hint="Optional. Associates this tunnel with a known agent.">
+            <Select value={agentId} onChange={(e) => setAgentId(e.target.value)}>
+              <option value="">None</option>
+              {agents.map((agent) => (
+                <option key={agent.id} value={String(agent.id)}>
+                  {agent.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
         )}
 
         {error && (
-          <div className="rounded-md border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
+          <p
+            role="alert"
+            className="rounded-md border border-subtle px-3 py-2 text-sm text-error"
+          >
             {error}
-          </div>
+          </p>
         )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? 'Creating…' : 'Create tunnel'}
+          </Button>
+        </div>
       </div>
     </Modal>
   );

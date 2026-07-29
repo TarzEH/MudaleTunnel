@@ -4,14 +4,16 @@ import type {
   Agent,
   AgentWritePayload,
   AuditEvent,
+  AutoExposeResponse,
   Engagement,
   EngagementWritePayload,
   EngineStatus,
   HealthResponse,
-  Listener,
   Me,
   Paginated,
-  Route,
+  PivotMap,
+  ProxychainsConfig,
+  ReachableResponse,
   Scan,
   ScanCreatePayload,
   Service,
@@ -70,8 +72,9 @@ function useList<T>(path: string | null, query?: QueryParams) {
   };
 }
 
-function useItem<T>(path: string | null) {
+function useItem<T>(path: string | null, query?: QueryParams) {
   const [state, setState] = useState<AsyncState<T>>({ data: null, loading: true, error: null });
+  const queryKey = JSON.stringify(query ?? {});
   const reloadToken = useRef(0);
 
   const reload = useCallback(() => {
@@ -87,7 +90,7 @@ function useItem<T>(path: string | null) {
     const controller = new AbortController();
     setState((s) => ({ ...s, loading: true, error: null }));
     api
-      .get<T>(path, undefined, controller.signal)
+      .get<T>(path, query, controller.signal)
       .then((data) => setState({ data, loading: false, error: null }))
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -95,7 +98,7 @@ function useItem<T>(path: string | null) {
       });
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, reloadToken.current]);
+  }, [path, queryKey, reloadToken.current]);
 
   return { data: state.data, loading: state.loading, error: state.error, reload, setState };
 }
@@ -179,29 +182,35 @@ export async function fetchTunnelLogs(id: number, limit = 200) {
   return api.get<{ results: TunnelLog[] }>(`/tunnels/${id}/logs/`, { limit });
 }
 
-export async function addRoute(tunnelId: number, cidr: string) {
-  return api.post<Route>(`/tunnels/${tunnelId}/routes/`, { cidr });
+export function usePivotMap(engagementId: number | null) {
+  return useItem<PivotMap>(engagementId ? '/pivot/map/' : null, { engagement: engagementId ?? undefined });
 }
 
-export async function deleteRoute(routeId: number) {
-  return api.delete<void>(`/routes/${routeId}/`);
+export async function getReachable(tunnelId: number) {
+  return api.get<ReachableResponse>(`/tunnels/${tunnelId}/reachable/`);
 }
 
-export interface ListenerPayload {
-  bind_host: string;
-  bind_port: number;
-  to_host: string;
-  to_port: number;
-  protocol: string;
-  label: string;
+export async function getProxychains(tunnelId: number) {
+  return api.get<ProxychainsConfig>(`/tunnels/${tunnelId}/proxychains/`);
 }
 
-export async function addListener(tunnelId: number, payload: ListenerPayload) {
-  return api.post<Listener>(`/tunnels/${tunnelId}/listeners/`, payload);
+export interface AutoExposePayload {
+  ports?: number[];
+  include_sensitive?: boolean;
+  limit?: number;
 }
 
-export async function deleteListener(listenerId: number) {
-  return api.delete<void>(`/listeners/${listenerId}/`);
+export async function autoExpose(tunnelId: number, payload: AutoExposePayload = {}) {
+  return api.post<AutoExposeResponse>(`/tunnels/${tunnelId}/auto-expose/`, payload);
+}
+
+export interface ExposeServicePayload {
+  local_port?: number;
+  label?: string;
+}
+
+export async function exposeService(serviceId: number, payload: ExposeServicePayload = {}) {
+  return api.post<Tunnel>(`/services/${serviceId}/expose/`, payload);
 }
 
 export function useScans(engagementId?: number | null) {

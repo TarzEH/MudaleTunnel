@@ -176,30 +176,6 @@ def test_delete_requests_a_stop_and_keeps_the_record(client, engagement):
     assert tunnel.desired_state == DesiredState.DOWN
 
 
-def test_routes_and_listeners(client, engagement):
-    tunnel_id = client.post(
-        reverse("v1:tunnel-list"),
-        {"engagement": engagement.pk, "kind": TunnelKind.SSH_LOCAL, "spec": spec()},
-    ).json()["id"]
-
-    route = client.post(reverse("v1:tunnel-add-route", args=[tunnel_id]), {"cidr": "10.4.9.0/24"})
-    assert route.status_code == 201
-    assert route.json()["cidr"] == "10.4.9.0/24"
-
-    denied = client.post(reverse("v1:tunnel-add-route", args=[tunnel_id]), {"cidr": "10.0.0.0/8"})
-    assert denied.status_code == 400
-    assert denied.json()["code"] == "out_of_scope"
-
-    listener = client.post(
-        reverse("v1:tunnel-add-listener", args=[tunnel_id]),
-        {"bind_host": "10.4.0.10", "bind_port": 9000, "to_host": "127.0.0.1", "to_port": 8000},
-    )
-    assert listener.status_code == 201
-
-    detail = client.get(reverse("v1:tunnel-detail", args=[tunnel_id])).json()
-    assert len(detail["routes"]) == 1
-    assert len(detail["listeners"]) == 1
-
 
 # ── Scans ───────────────────────────────────────────────────────────────
 

@@ -119,6 +119,11 @@ def ingest_results(scan: Scan, parsed: ParsedScan, *, raw_xml: str = "") -> int:
         ]
     )
 
+    # A scan run through a pivot is evidence of what that pivot can reach.
+    from apps.tunnels.pivot import refresh_agent_reachability
+
+    refresh_agent_reachability(scan)
+
     record(
         AuditAction.SCAN_COMPLETED,
         engagement=scan.engagement,
