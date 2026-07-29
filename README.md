@@ -43,6 +43,30 @@ MudaleTunnel does pivoting the other way round. Instead of routing a subnet you
    so tools that cannot speak SOCKS get a `localhost` port.
 4. **Chains** — a newly reachable host can become the next foothold.
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Op as Operator
+    participant MT as MudaleTunnel
+    participant Jump as Foothold
+    participant Net as Internal network
+
+    Op->>MT: tunnel create --kind ssh_dynamic
+    MT->>Jump: ssh -D 1080
+    Note over MT,Jump: SOCKS proxy is up
+
+    Op->>MT: scan run --via-tunnel 3
+    MT->>Jump: nmap, through proxychains
+    Jump->>Net: connect() to each port
+    Net-->>Jump: open / closed
+    Jump-->>MT: results
+    Note over MT: every finding is recorded<br/>against the tunnel that proved it
+
+    Op->>MT: pivot expose 42
+    MT->>Jump: ssh -L 14000:10.4.9.5:1433
+    Note over Op,Jump: localhost:14000 now reaches<br/>a host only the foothold can see
+```
+
 The map is evidence, not assumption. And around that:
 
 | | |
@@ -212,31 +236,116 @@ through a pivot. No profile can write to a path or run NSE scripts.
 
 ---
 
+## The dashboard
+
+Everything the CLI does, the dashboard does — same API, same policy checks. Both
+are live: an action taken in the terminal appears in the browser without a
+reload.
+
+> The screenshots below use invented data. Every address, hostname and finding
+> is fiction, written by `manage.py seed_sample_data`.
+
+**Sessions** — every tunnel in the engagement, what it forwards, and how long it
+has been up. Status is observed by the engine, never asserted by the web tier.
+
+<p align="center">
+  <img src="docs/img/dashboard-sessions.png" alt="Sessions" width="900">
+</p>
+
+**Topology** — what each pivot has been *proven* to reach. Solid edges are
+direct, dashed ones go through a foothold, and each is labelled with the subnets
+it opened. Clicking a host offers to expose any of its open ports.
+
+<p align="center">
+  <img src="docs/img/dashboard-topology.png" alt="Topology" width="900">
+</p>
+
+**Scans** — results grouped by host, with the tunnel each was found through. Any
+service can become a local forward from here.
+
+<p align="center">
+  <img src="docs/img/dashboard-scans.png" alt="Scans" width="900">
+</p>
+
+**Audit** — who did what, when, and what was refused. Append-only, and it
+outlives both the operator account and the object it describes.
+
+<p align="center">
+  <img src="docs/img/dashboard-audit.png" alt="Audit" width="900">
+</p>
+
+---
+
 ## Architecture
 
-```
-┌──────────────┐        ┌──────────────┐
-│  mudale CLI  │        │  Dashboard   │
-└──────┬───────┘        └──────┬───────┘
-       │   REST + WebSocket    │
-       └───────────┬───────────┘
-                   ▼
-        ┌──────────────────────┐
-        │  Django (ASGI)       │
-        │  ├── API + auth      │
-        │  ├── service layer   │ ← scope checks, roles, audit
-        │  └── Channels        │
-        └───────┬──────────────┘
-                │  desired state
-        ┌───────▼──────────────┐      ┌─────────────┐
-        │  PostgreSQL + Redis  │◄─────┤  enginectl  │ ← owns every subprocess
-        └──────────────────────┘      └──────┬──────┘
-                observed state                │
-                                        ssh · nmap
+```mermaid
+flowchart TB
+    subgraph clients[" "]
+        direction LR
+        CLI["<b>mudale</b> CLI"]
+        UI["Dashboard"]
+    end
+
+    subgraph web["Django · ASGI"]
+        direction TB
+        API["REST API + auth"]
+        SVC["service layer<br/><i>scope · roles · audit</i>"]
+        WS["Channels"]
+        API --> SVC
+    end
+
+    subgraph state["State"]
+        direction LR
+        PG[("PostgreSQL")]
+        RD[("Redis")]
+    end
+
+    ENG["<b>enginectl</b><br/>owns every subprocess"]
+    TOOLS["ssh · nmap · proxychains"]
+
+    CLI -- "REST" --> API
+    UI  -- "REST" --> API
+    UI  -. "WebSocket" .-> WS
+    SVC -- "desired state" --> PG
+    WS  <--> RD
+    PG  -- "desired state" --> ENG
+    ENG -- "observed state" --> PG
+    ENG -- "broadcast" --> RD
+    ENG --> TOOLS
+
+    classDef store fill:#18181b,stroke:#3f3f46,color:#a1a1aa
+    classDef engine fill:#0e2a2f,stroke:#22d3ee,color:#e5f6f9
+    class PG,RD store
+    class ENG engine
 ```
 
 **The web tier never spawns a process.** It records what an operator *wants*;
 the engine daemon reconciles reality towards it and writes back what *is*.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> pending: operator requests
+    pending --> starting: engine picks it up
+    starting --> active: process running
+    active --> degraded: health check failing
+    degraded --> active: recovered
+    active --> stopping: desired_state = down
+    stopping --> stopped
+    starting --> failed: could not start
+    active --> failed: died on its own
+    failed --> pending: operator restarts
+    stopped --> pending: operator restarts
+
+    note right of pending
+        Written by the API.
+        The engine never sets desired_state.
+    end note
+    note right of active
+        Written by the engine.
+        The API never sets status.
+    end note
+```
 
 That split is why the system is survivable. A gunicorn or daphne worker is
 recycled on every deploy and under load — a tunnel living inside one would be
