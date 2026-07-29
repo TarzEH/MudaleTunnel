@@ -43,6 +43,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Every source file is actually committed
+        # A bare `test.py` rule in the inherited .gitignore silently excluded
+        # mudale/settings/test.py: present on every developer's disk, absent
+        # from every clone, and CI could not import its own settings. Checking
+        # tracked-vs-present catches that whole class rather than that one file.
+        run: |
+          missing=$(comm -13 \
+            <(git ls-files backend | grep '\.py$' | sort) \
+            <(find backend -name '*.py' -not -path '*/.venv/*' -not -path '*__pycache__*' | sort))
+          if [ -n "$missing" ]; then
+            echo "::error::These files exist but are not tracked — check .gitignore:"
+            echo "$missing"
+            exit 1
+          fi
+          echo "all backend sources are tracked"
+
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
