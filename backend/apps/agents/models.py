@@ -20,8 +20,7 @@ class EngineKind(models.TextChoices):
 
 
 class AgentStatus(models.TextChoices):
-    # Registered but never seen — e.g. a ligolo agent binary generated and
-    # staged, but not yet executed on the target.
+    # Registered but never reached — credentials recorded, nothing connected yet.
     PENDING = "pending", "Pending"
     ONLINE = "online", "Online"
     OFFLINE = "offline", "Offline"
@@ -50,8 +49,7 @@ class Agent(models.Model):
     )
 
     # ── Where it is ─────────────────────────────────────────────────────
-    # Address the control plane reaches the agent at (SSH host, or the source
-    # address a ligolo agent called back from).
+    # Address the control plane reaches this foothold at.
     remote_host = models.CharField(max_length=253, blank=True)
     remote_port = models.PositiveIntegerField(null=True, blank=True)
 
