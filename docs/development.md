@@ -114,3 +114,26 @@ otherwise only surfaces as a runtime error after deploy.
 Every setting is read through the typed helpers in `mudale/settings/env.py`, so
 a missing or malformed value fails loudly at import rather than defaulting to
 something insecure. `backend/.env.example` lists them all.
+
+## Cutting a release
+
+The version lives in exactly one place: `backend/mudale/__init__.py`. The wheel,
+the dashboard footer, the engine banner and the release page all resolve to it.
+
+```bash
+# 1. Bump it
+$EDITOR backend/mudale/__init__.py
+
+# 2. Commit and tag — the tag must match, and CI fails the release if it does not
+git commit -am "Release 3.1.0"
+git tag v3.1.0
+git push origin main --tags
+```
+
+The release workflow then runs the full CI suite, builds the wheel, sdist and
+dashboard bundle with checksums, pushes a multi-arch image to GHCR, and opens a
+**draft** release for a human to read before it goes out.
+
+Nothing publishes on a green build alone. v2 auto-released on every CI pass,
+which is how a build whose every tunnel deadlocked ended up tagged and
+downloadable.
