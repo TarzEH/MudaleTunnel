@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useEngagementContext } from '../context/EngagementContext';
-import { useMe } from '../api/hooks';
+import { useMe, useVersion } from '../api/hooks';
 import type { ConnectionState } from '../hooks/useEngagementSocket';
 import { StatusDot } from './StatusDot';
 import {
@@ -46,6 +46,7 @@ function connectionLabel(state: ConnectionState): string {
 }
 
 export function Sidebar({ connectionState }: { connectionState: ConnectionState }) {
+  const version = useVersion();
   const { engagements, selectedId, setSelectedId, loading } = useEngagementContext();
   const { data: me } = useMe();
 
@@ -126,8 +127,15 @@ export function Sidebar({ connectionState }: { connectionState: ConnectionState 
             </div>
           </div>
         </div>
-        <div className="mt-2 max-md:hidden">
+        <div className="mt-2 flex items-center justify-between max-md:hidden">
           <StatusDot tone={connectionTone(connectionState)} label={connectionLabel(connectionState)} />
+          {/* Shown so a screenshot or a bug report always says which build it
+              came from, without anyone having to go and ask. */}
+          {version && (
+            <span className="font-mono text-[11px] text-text-muted" title="Server version">
+              v{version}
+            </span>
+          )}
         </div>
       </div>
     </aside>

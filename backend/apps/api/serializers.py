@@ -22,6 +22,7 @@ from apps.tunnels.models import Tunnel
 
 
 class MeSerializer(serializers.Serializer):
+    server_version = serializers.CharField()
     id = serializers.IntegerField()
     username = serializers.CharField()
     callsign = serializers.CharField()

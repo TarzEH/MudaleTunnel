@@ -53,10 +53,10 @@ from apps.tunnels.models import (
     TunnelLogLevel,
     TunnelStatus,
 )
+from mudale import __version__ as VERSION
 
 logger = logging.getLogger(__name__)
 
-VERSION = "3.0.0"
 
 #: Keep at most this many log lines per tunnel in the database. The engine
 #: prunes on write so a chatty process cannot grow the table without bound —
@@ -111,6 +111,9 @@ class Supervisor:
         return {
             "ssh": self.ssh.is_available(),
             "nmap": self.nmap.is_available(),
+            # Without proxychains, scans can still run — but not *through* a
+            # pivot, so the dashboard needs to know.
+            "pivot_scanning": self.nmap.can_scan_through_a_pivot(),
         }
 
     def register(self) -> EngineInstance:
@@ -126,10 +129,11 @@ class Supervisor:
             },
         )
         logger.info(
-            "Engine %s registered (ssh=%s nmap=%s)",
+            "Engine %s registered (ssh=%s nmap=%s pivot_scanning=%s)",
             self.instance_id,
             capabilities["ssh"],
             capabilities["nmap"],
+            capabilities["pivot_scanning"],
         )
         return instance
 
@@ -199,10 +203,16 @@ class Supervisor:
         a live tunnel into a client network on startup would be worse than
         reporting that it needs attention.
         """
-        stale = Tunnel.objects.filter(status__in=LIVE_STATUSES).exclude(
-            owner_engine_id=self.instance_id
+        stale = (
+            Tunnel.objects.filter(status__in=LIVE_STATUSES)
+            .exclude(owner_engine_id=self.instance_id)
+            .select_related("engagement")
         )
         for tunnel in stale:
+            if not tunnel.engagement.is_operational:
+                # Not ours to reconcile. Leaving the row as it stands is also
+                # what makes an archived engagement readable after the fact.
+                continue
             if tunnel.pid and is_pid_alive(tunnel.pid):
                 if tunnel.status != TunnelStatus.DEGRADED:
                     self._set_status(
@@ -237,10 +247,20 @@ class Supervisor:
         if capacity <= 0:
             return
 
-        wanted = Tunnel.objects.filter(
-            desired_state=DesiredState.UP,
-            status__in=[TunnelStatus.PENDING],
-        ).exclude(pk__in=self.tunnels.keys())[:capacity]
+        # Only act for engagements that are actually operational. A paused,
+        # closed or out-of-window engagement authorises nothing, and starting a
+        # tunnel for one would route traffic into a client network the team is
+        # no longer permitted to touch.
+        wanted = [
+            tunnel
+            for tunnel in Tunnel.objects.filter(
+                desired_state=DesiredState.UP,
+                status__in=[TunnelStatus.PENDING],
+            )
+            .exclude(pk__in=self.tunnels.keys())
+            .select_related("engagement")[: capacity * 4]
+            if tunnel.engagement.is_operational
+        ][:capacity]
 
         for tunnel in wanted:
             self._start_tunnel(tunnel)
@@ -434,9 +454,26 @@ class Supervisor:
             broadcast.scan_updated(scan)
             return
 
-        plan = self.nmap.plan(
-            target=target, profile=scan.profile, through_tunnel=scan.via_tunnel_id is not None
-        )
+        socks = self._socks_for(scan)
+        if scan.via_tunnel_id is not None and socks is None:
+            # Refuse rather than quietly scan from the wrong vantage point. A
+            # result labelled "through the pivot" that actually came from the
+            # engine host is worse than no result: it becomes a false claim in
+            # the reachability map and in the report.
+            scan_services.mark_failed(
+                scan,
+                "The scan was requested through a tunnel that is not a live SOCKS proxy, "
+                "so it cannot be routed. Start the pivot and try again.",
+            )
+            broadcast.scan_updated(scan)
+            return
+
+        try:
+            plan = self.nmap.plan(target=target, profile=scan.profile, socks=socks)
+        except AdapterUnavailable as exc:
+            scan_services.mark_failed(scan, str(exc))
+            broadcast.scan_updated(scan)
+            return
         process = SupervisedProcess(
             argv=plan.argv, env=plan.env, description=plan.description, log_lines=20000
         )
@@ -457,6 +494,23 @@ class Supervisor:
         scan.save(update_fields=["status", "pid", "owner_engine_id", "started_at"])
         broadcast.scan_updated(scan)
         logger.info("Scan %s started: %s", scan.pk, plan.description)
+
+    def _socks_for(self, scan: Scan) -> tuple[str, int] | None:
+        """The SOCKS endpoint to route this scan through, if it asked for one."""
+        if scan.via_tunnel_id is None:
+            return None
+
+        tunnel = Tunnel.objects.filter(pk=scan.via_tunnel_id).first()
+        if tunnel is None or tunnel.kind != TunnelKind.SSH_DYNAMIC:
+            return None
+        if tunnel.status != TunnelStatus.ACTIVE:
+            return None
+
+        bind = tunnel.spec.get("local_bind", "127.0.0.1")
+        port = tunnel.spec.get("local_port")
+        if not isinstance(port, int):
+            return None
+        return (bind, port)
 
     def _reap_finished_scans(self) -> None:
         timeout = float(self.config["SCAN_TIMEOUT_SECONDS"])

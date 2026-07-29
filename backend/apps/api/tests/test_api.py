@@ -322,6 +322,27 @@ def test_viewer_can_read_but_not_write(engagement, django_user_model):
 # ── Health ──────────────────────────────────────────────────────────────
 
 
+def test_engine_capabilities_are_an_object_not_a_list(client):
+    """Pins the shape the dashboard renders.
+
+    It was typed as a list on the frontend and sent as an object here, which
+    crashed the Settings page with "capabilities.map is not a function". An
+    object is the right shape — it can say a capability is *unavailable*, which
+    a list of present names cannot.
+    """
+    from apps.engine.models import EngineInstance
+
+    EngineInstance.objects.create(
+        instance_id="test", hostname="h", version="3.0.0",
+        capabilities={"ssh": True, "nmap": True, "pivot_scanning": False},
+    )
+    body = client.get(reverse("v1:engine-status")).json()
+    assert body["attached"] is True
+    capabilities = body["instances"][0]["capabilities"]
+    assert isinstance(capabilities, dict)
+    assert capabilities["pivot_scanning"] is False
+
+
 def test_health_is_public_and_says_nothing_else():
     response = APIClient().get(reverse("v1:health"))
     assert response.status_code == 200

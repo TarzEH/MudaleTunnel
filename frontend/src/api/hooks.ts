@@ -252,3 +252,35 @@ export async function login(username: string, password: string) {
 export async function logout() {
   return api.post<void>('/auth/logout/');
 }
+
+/**
+ * The server's version, resolved once and cached for the session.
+ *
+ * Read from the server rather than baked in at build time, so what the UI shows
+ * is the version actually answering requests — not the version whoever built
+ * the bundle happened to have checked out.
+ */
+let cachedVersion: string | null = null;
+
+export function useVersion(): string | null {
+  const [version, setVersion] = useState<string | null>(cachedVersion);
+
+  useEffect(() => {
+    if (cachedVersion) return;
+    let cancelled = false;
+    api
+      .get<Me>('/me/')
+      .then((value) => {
+        cachedVersion = value.server_version;
+        if (!cancelled) setVersion(value.server_version);
+      })
+      .catch(() => {
+        /* A missing version is not worth surfacing. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return version;
+}

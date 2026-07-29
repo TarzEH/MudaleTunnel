@@ -14,6 +14,7 @@ from apps.scans.models import ScanProfile
 def adapter(monkeypatch):
     instance = NmapAdapter("nmap")
     monkeypatch.setattr(instance, "binary", lambda: "/usr/bin/nmap")
+    monkeypatch.setattr(instance, "proxychains_binary", lambda: "/usr/bin/proxychains4")
     return instance
 
 
@@ -88,17 +89,51 @@ def test_only_udp_profile_needs_root(adapter):
     assert not adapter.requires_root(ScanProfile.STANDARD)
 
 
-def test_tunnelled_scan_tells_nmap_it_is_unprivileged(adapter):
-    """Through a userland pivot, nmap's host discovery lies unless told not to."""
+def test_tunnelled_scan_tells_nmap_it_is_unprivileged(adapter, tmp_path, settings):
+    """Through a SOCKS pivot, nmap's host discovery lies unless told not to."""
+    settings.ENGINE = {**settings.ENGINE, "LOG_DIR": str(tmp_path / "logs")}
     plan = adapter.plan(
-        target=net("10.4.0.0/24"), profile=ScanProfile.STANDARD, through_tunnel=True
+        target=net("10.4.0.0/24"), profile=ScanProfile.STANDARD, socks=("127.0.0.1", 1080)
     )
     assert "-Pn" in plan.argv
     assert "--unprivileged" in plan.argv
 
 
-def test_direct_scan_does_not_add_tunnel_flags(adapter):
+def test_a_tunnelled_scan_is_actually_routed_through_the_proxy(adapter, tmp_path, settings):
+    """Recording the association without routing the traffic would make the
+    reachability map a claim rather than evidence."""
+    settings.ENGINE = {**settings.ENGINE, "LOG_DIR": str(tmp_path / "logs")}
+    plan = adapter.plan(
+        target=net("10.4.0.0/24"), profile=ScanProfile.QUICK, socks=("127.0.0.1", 1080)
+    )
+    assert plan.argv[0].endswith("proxychains4")
+    config_path = plan.argv[plan.argv.index("-f") + 1]
+    assert "socks5 127.0.0.1 1080" in open(config_path).read()
+    # nmap still comes after, with its own arguments intact.
+    assert "/usr/bin/nmap" in plan.argv
+
+
+def test_direct_scan_is_not_proxied(adapter):
     plan = adapter.plan(target=net("10.4.0.0/24"), profile=ScanProfile.STANDARD)
+    assert not plan.argv[0].endswith("proxychains4")
+
+
+def test_an_unprivileged_scan_skips_host_discovery(adapter, monkeypatch):
+    """Without raw sockets nmap's discovery phase declares live hosts down.
+
+    Found the hard way: a /24 sweep returned two services on one host in two
+    seconds, because every other host had been skipped before a single port was
+    tried.
+    """
+    monkeypatch.setattr(adapter, "has_raw_sockets", lambda: False)
+    plan = adapter.plan(target=net("198.51.100.0/24"), profile=ScanProfile.QUICK)
+    assert "-Pn" in plan.argv
+    assert "--unprivileged" in plan.argv
+
+
+def test_a_privileged_scan_lets_nmap_do_its_own_discovery(adapter, monkeypatch):
+    monkeypatch.setattr(adapter, "has_raw_sockets", lambda: True)
+    plan = adapter.plan(target=net("198.51.100.0/24"), profile=ScanProfile.QUICK)
     assert "-Pn" not in plan.argv
 
 
