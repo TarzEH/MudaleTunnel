@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mudaletunnel"
-version = "3.0.0.dev0"
-description = "Control plane for network pivoting — manages ligolo-ng and SSH tunnel engines"
+dynamic = ["version"]
+description = "Control plane for network pivoting: SSH tunnels, nmap-driven discovery, scope enforcement"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 
@@ -42,6 +42,11 @@ dev = [
 
 [project.scripts]
 mudale = "mudale_cli.main:main"
+
+# Single source of truth: the tag, the wheel, the dashboard footer and the
+# engine banner all resolve to mudale.__version__.
+[tool.hatch.version]
+path = "mudale/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["mudale", "apps", "mudale_cli"]

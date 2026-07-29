@@ -4,6 +4,9 @@ on:
   push:
     branches: [master, main, v3]
   pull_request:
+  # So the release workflow can run exactly this suite rather than a copy of it
+  # that is free to drift.
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.ref }}

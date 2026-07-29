@@ -1,0 +1,153 @@
+name: Release
+
+# Cutting a release is deliberate: push a tag, and only then does anything get
+# published. v2 auto-released on every green CI run, which is how a build whose
+# every tunnel deadlocked ended up tagged and downloadable.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  verify:
+    name: Verify the tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches the version in the code
+        # A tag that disagrees with mudale/__init__.py means the dashboard,
+        # the CLI and the release page would all claim different things.
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          code="$(grep -oE '__version__ = "[^"]+"' backend/mudale/__init__.py | cut -d'"' -f2)"
+          echo "tag=$tag  code=$code"
+          test "$tag" = "$code" || {
+            echo "::error::Tag $GITHUB_REF_NAME does not match __version__ ($code)."
+            echo "Update backend/mudale/__init__.py, commit, then re-tag."
+            exit 1
+          }
+
+  test:
+    name: Full suite
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+
+  artifacts:
+    name: Build artifacts
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: frontend/package-lock.json }
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Build the dashboard
+        working-directory: frontend
+        run: npm ci && npm run build
+
+      - name: Build the Python distribution
+        working-directory: backend
+        # The wheel carries the CLI. `pip install mudaletunnel` then gives you
+        # `mudale`, which is all an operator needs on a laptop that is not the
+        # engine host.
+        run: uv build --out-dir ../dist
+
+      - name: Bundle the dashboard
+        run: tar -czf dist/mudaletunnel-dashboard-${{ github.ref_name }}.tar.gz -C frontend dist
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with: { name: release-artifacts, path: dist/ }
+
+  image:
+    name: Publish image
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # linux/arm64 as well: plenty of operators run this on Apple silicon.
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  publish:
+    name: Draft the release
+    needs: [artifacts, image]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/download-artifact@v4
+        with: { name: release-artifacts, path: dist }
+
+      - name: Release notes
+        id: notes
+        run: |
+          previous="$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+          {
+            echo 'body<<NOTES'
+            if [ -n "$previous" ]; then
+              echo "### Changes since $previous"
+              echo
+              git log --no-merges --pretty='- %s' "$previous..${GITHUB_REF_NAME}"
+            else
+              echo "First tagged release."
+            fi
+            echo
+            echo '### Install'
+            echo
+            echo '```bash'
+            echo "docker pull ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_REF_NAME#v}"
+            echo '```'
+            echo
+            echo 'Or just the CLI:'
+            echo
+            echo '```bash'
+            echo "pip install mudaletunnel==${GITHUB_REF_NAME#v}"
+            echo '```'
+            echo
+            echo 'Verify downloads against `SHA256SUMS`.'
+            echo NOTES
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body: ${{ steps.notes.outputs.body }}
+          # Drafted, not published: a human reads the notes before it goes out.
+          draft: true
+          generate_release_notes: false
