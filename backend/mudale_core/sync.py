@@ -261,7 +261,7 @@ class SyncBridge:
                     report.errors.append(f"Scan remote_id={remote_id} vanished from dashboard")
                 continue
 
-            if rec.profile not in ScanProfile.values:
+            if rec.profile not in ScanProfile._value2member_map_:
                 report.errors.append(f"Scan {rec.id} unknown profile {rec.profile!r}")
                 continue
 

@@ -60,8 +60,13 @@ def test_failed_login_is_audited():
 
 
 def test_failed_login_does_not_record_the_password():
-    APIClient().post(reverse("v1:login"), {"username": "opsec", "password": "hunter2-secret"})
-    event = AuditEvent.objects.get(action=AuditAction.LOGIN_FAILED)
+    response = APIClient().post(
+        reverse("v1:login"), {"username": "opsec", "password": "hunter2-secret"},
+        format="json",
+    )
+    assert response.status_code == 401
+    event = AuditEvent.objects.filter(action=AuditAction.LOGIN_FAILED).first()
+    assert event is not None, "LOGIN_FAILED audit event was not recorded"
     assert "hunter2-secret" not in str(event.payload)
     assert "hunter2-secret" not in event.message
 

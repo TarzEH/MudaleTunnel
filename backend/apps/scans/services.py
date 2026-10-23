@@ -57,7 +57,7 @@ def request_scan(
                 f"Your engagement role ({membership.get_role_display()}) is read-only"
             )
 
-    if profile not in ScanProfile.values:
+    if profile not in ScanProfile._value2member_map_:
         raise ValueError(f"Unknown scan profile {profile!r}")
 
     try:

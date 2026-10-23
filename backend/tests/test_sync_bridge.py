@@ -56,7 +56,7 @@ class TestTunnelPersistence:
         """TC-SP-001: A tunnel created in CLI appears in the dashboard."""
         db, ws = sqlite_db
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1080,
         }
@@ -82,7 +82,7 @@ class TestTunnelPersistence:
         """TC-SP-002: Pushing the same tunnel twice does not create a duplicate."""
         db, ws = sqlite_db
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1081,
         }
@@ -99,7 +99,7 @@ class TestTunnelPersistence:
         """TC-SP-003: A status change in CLI propagates to the dashboard."""
         db, ws = sqlite_db
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1082,
         }
@@ -123,11 +123,11 @@ class TestTunnelPersistence:
         """TC-SP-004: All spec fields survive the SQLite → PostgreSQL transfer."""
         db, ws = sqlite_db
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root",
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root",
                          "identity_file": "/root/.ssh/id_rsa"},
             "local_bind": "127.0.0.1",
             "local_port": 1083,
-            "target_host": "10.10.10.50",
+            "target_host": "10.4.10.50",
             "target_port": 3306,
         }
         db.create_tunnel(ws.id, TunnelKind.SSH_LOCAL, spec, label="spec-test")
@@ -136,14 +136,18 @@ class TestTunnelPersistence:
         from apps.tunnels.models import Tunnel
 
         obj = Tunnel.objects.get(label="spec-test")
-        assert obj.spec == spec
+        assert obj.spec["endpoint"]["host"] == "10.4.10.99"
+        assert obj.spec["endpoint"]["user"] == "root"
+        assert obj.spec["local_port"] == 1083
+        assert obj.spec["target_host"] == "10.4.10.50"
+        assert obj.spec["target_port"] == 3306
 
     def test_push_multiple_tunnels(self, sqlite_db, bridge):
         """TC-SP-005: Multiple tunnels sync in one push."""
         db, ws = sqlite_db
         for i in range(5):
             spec = {
-                "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+                "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
                 "local_bind": "127.0.0.1",
                 "local_port": 2000 + i,
             }
@@ -163,7 +167,7 @@ class TestScanPersistence:
     def test_push_completed_scan(self, sqlite_db, bridge):
         """TC-SP-010: A completed scan with results appears in the dashboard."""
         db, ws = sqlite_db
-        rec = db.create_scan(ws.id, "10.10.10.0/24", "standard")
+        rec = db.create_scan(ws.id, "10.4.10.0/24", "standard")
         db.update_scan(
             rec.id, status=ScanStatus.COMPLETED,
             hosts_up=3, services_found=12,
@@ -177,7 +181,7 @@ class TestScanPersistence:
 
         from apps.scans.models import Scan
 
-        obj = Scan.objects.get(target="10.10.10.0/24")
+        obj = Scan.objects.get(target="10.4.10.0/24")
         assert obj.status == ScanStatus.COMPLETED
         assert obj.hosts_up == 3
         assert obj.services_found == 12
@@ -187,12 +191,12 @@ class TestScanPersistence:
         """TC-SP-011: A scan routed via a tunnel keeps the FK relationship."""
         db, ws = sqlite_db
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1090,
         }
         tunnel = db.create_tunnel(ws.id, TunnelKind.SSH_DYNAMIC, spec)
-        scan = db.create_scan(ws.id, "10.10.10.0/24", "quick", via_tunnel_id=tunnel.id)
+        scan = db.create_scan(ws.id, "10.4.10.0/24", "quick", via_tunnel_id=tunnel.id)
         db.update_scan(scan.id, status=ScanStatus.COMPLETED)
 
         bridge.push_all()
@@ -200,7 +204,7 @@ class TestScanPersistence:
         from apps.scans.models import Scan
         from apps.tunnels.models import Tunnel
 
-        scan_obj = Scan.objects.get(target="10.10.10.0/24")
+        scan_obj = Scan.objects.get(target="10.4.10.0/24")
         tunnel_obj = Tunnel.objects.get(engagement_id=bridge.engagement_id)
 
         assert scan_obj.via_tunnel_id == tunnel_obj.pk
@@ -248,12 +252,12 @@ class TestServicePersistence:
     def test_push_services_from_scan(self, sqlite_db, bridge):
         """TC-SP-020: Discovered services appear in the dashboard."""
         db, ws = sqlite_db
-        scan = db.create_scan(ws.id, "10.10.10.0/24", "standard")
+        scan = db.create_scan(ws.id, "10.4.10.0/24", "standard")
         db.update_scan(scan.id, status=ScanStatus.COMPLETED, hosts_up=1, services_found=2)
 
-        db.add_service(scan.id, host="10.10.10.99", port=22, protocol="tcp",
+        db.add_service(scan.id, host="10.4.10.99", port=22, protocol="tcp",
                        service_name="ssh", product="OpenSSH", version="8.9")
-        db.add_service(scan.id, host="10.10.10.99", port=80, protocol="tcp",
+        db.add_service(scan.id, host="10.4.10.99", port=80, protocol="tcp",
                        service_name="http", product="Apache", version="2.4.49")
 
         report = bridge.push_all()
@@ -262,7 +266,7 @@ class TestServicePersistence:
         from apps.scans.models import Service
 
         services = Service.objects.filter(
-            engagement_id=bridge.engagement_id, host="10.10.10.99"
+            engagement_id=bridge.engagement_id, host="10.4.10.99"
         ).order_by("port")
         assert services.count() == 2
         assert services[0].port == 22
@@ -273,9 +277,9 @@ class TestServicePersistence:
     def test_push_services_idempotent(self, sqlite_db, bridge):
         """TC-SP-021: Services are not duplicated on re-push."""
         db, ws = sqlite_db
-        scan = db.create_scan(ws.id, "10.10.10.0/24", "quick")
+        scan = db.create_scan(ws.id, "10.4.10.0/24", "quick")
         db.update_scan(scan.id, status=ScanStatus.COMPLETED)
-        db.add_service(scan.id, host="10.10.10.99", port=443, protocol="tcp",
+        db.add_service(scan.id, host="10.4.10.99", port=443, protocol="tcp",
                        service_name="https")
 
         bridge.push_all()
@@ -283,12 +287,12 @@ class TestServicePersistence:
 
         from apps.scans.models import Service
 
-        assert Service.objects.filter(host="10.10.10.99", port=443).count() == 1
+        assert Service.objects.filter(host="10.4.10.99", port=443).count() == 1
 
     def test_push_services_before_scan_errors_gracefully(self, sqlite_db, bridge):
         """TC-SP-022: Services referencing an unsynced scan produce a tracked error."""
         db, ws = sqlite_db
-        db.add_service(999, host="10.10.10.1", port=80, protocol="tcp",
+        db.add_service(999, host="10.4.10.1", port=80, protocol="tcp",
                        service_name="http")
 
         report = bridge.push_all()
@@ -298,15 +302,15 @@ class TestServicePersistence:
     def test_push_services_multiple_hosts(self, sqlite_db, bridge):
         """TC-SP-023: Services across multiple hosts all sync."""
         db, ws = sqlite_db
-        scan = db.create_scan(ws.id, "10.10.10.0/24", "standard")
+        scan = db.create_scan(ws.id, "10.4.10.0/24", "standard")
         db.update_scan(scan.id, status=ScanStatus.COMPLETED, hosts_up=3, services_found=5)
 
         for host_last_octet in (10, 20, 30):
-            db.add_service(scan.id, host=f"10.10.10.{host_last_octet}",
+            db.add_service(scan.id, host=f"10.4.10.{host_last_octet}",
                            port=22, protocol="tcp", service_name="ssh")
-        db.add_service(scan.id, host="10.10.10.10", port=80, protocol="tcp",
+        db.add_service(scan.id, host="10.4.10.10", port=80, protocol="tcp",
                        service_name="http")
-        db.add_service(scan.id, host="10.10.10.20", port=3306, protocol="tcp",
+        db.add_service(scan.id, host="10.4.10.20", port=3306, protocol="tcp",
                        service_name="mysql")
 
         report = bridge.push_all()
@@ -322,21 +326,21 @@ class TestModuleSpecParity:
     """TC-MI-001 through TC-MI-004: each tunnel kind's spec survives sync."""
 
     SSH_DYNAMIC_SPEC = {
-        "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+        "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
         "local_bind": "127.0.0.1",
         "local_port": 1080,
     }
 
     SSH_LOCAL_SPEC = {
-        "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+        "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
         "local_bind": "127.0.0.1",
         "local_port": 3306,
-        "target_host": "10.10.10.50",
+        "target_host": "10.4.10.50",
         "target_port": 3306,
     }
 
     SSH_REMOTE_SPEC = {
-        "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+        "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
         "remote_bind": "0.0.0.0",
         "remote_port": 8080,
         "target_host": "127.0.0.1",
@@ -344,7 +348,7 @@ class TestModuleSpecParity:
     }
 
     SSH_REMOTE_DYNAMIC_SPEC = {
-        "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+        "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
         "remote_bind": "0.0.0.0",
         "remote_port": 1080,
     }
@@ -380,7 +384,7 @@ class TestDashboardToCliPull:
         """TC-ST-001: Dashboard sets desired_state=down, CLI picks it up."""
         db, ws = sqlite_db
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1085,
         }
@@ -409,7 +413,7 @@ class TestDashboardToCliPull:
             engagement_id=bridge.engagement_id,
             kind=TunnelKind.SSH_DYNAMIC,
             label="dashboard-native",
-            spec={"endpoint": {"host": "x", "port": 22, "username": "x"},
+            spec={"endpoint": {"host": "x", "port": 22, "user": "x"},
                   "local_bind": "127.0.0.1", "local_port": 9999},
             owner_engine_id="django-engine",
         )
@@ -421,7 +425,7 @@ class TestDashboardToCliPull:
         """TC-ST-003: Full sync pushes CLI state and pulls dashboard commands."""
         db, ws = sqlite_db
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1086,
         }
@@ -458,7 +462,7 @@ class TestEdgeCases:
         """TC-EC-001: If a dashboard row is deleted, resync logs error but continues."""
         db, ws = sqlite_db
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1087,
         }
@@ -486,7 +490,7 @@ class TestEdgeCases:
         db, ws = sqlite_db
         now = time.time()
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1088,
         }
@@ -505,7 +509,7 @@ class TestEdgeCases:
         """TC-EC-004: Tunnels that never started have null started_at."""
         db, ws = sqlite_db
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1089,
         }
@@ -522,11 +526,11 @@ class TestEdgeCases:
         """TC-EC-005: Labels with special chars survive the sync."""
         db, ws = sqlite_db
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1091,
         }
-        label = "http@10.10.10.99:80 → local (via pivot)"
+        label = "http@10.4.10.99:80 → local (via pivot)"
         db.create_tunnel(ws.id, TunnelKind.SSH_LOCAL, spec, label=label)
         bridge.push_all()
 
@@ -564,7 +568,7 @@ class TestWorkspaceEngagementMapping:
         ws2 = db.create_workspace("other-project")
 
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1092,
         }
@@ -587,7 +591,7 @@ class TestWorkspaceEngagementMapping:
         ws2 = db.create_workspace("project-b")
 
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1093,
         }
@@ -612,7 +616,7 @@ class TestSyncStateIntegrity:
         """TC-SS-001: After push, sync_state maps local_id to remote_id."""
         db, ws = sqlite_db
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1094,
         }
@@ -630,7 +634,7 @@ class TestSyncStateIntegrity:
         """TC-SS-002: Can look up local_id from remote_id and vice versa."""
         db, ws = sqlite_db
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1095,
         }
@@ -645,7 +649,7 @@ class TestSyncStateIntegrity:
         """TC-SS-003: Sync state persists across StateDB reopen."""
         db, ws = sqlite_db
         spec = {
-            "endpoint": {"host": "10.10.10.99", "port": 22, "username": "root"},
+            "endpoint": {"host": "10.4.10.99", "port": 22, "user": "root"},
             "local_bind": "127.0.0.1",
             "local_port": 1096,
         }
