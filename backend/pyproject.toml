@@ -8,6 +8,28 @@ dynamic = ["version"]
 description = "SSH tunnels, nmap scanning, network pivoting — standalone CLI or web dashboard"
 requires-python = ">=3.12"
 license = { text = "MIT" }
+readme = "../README.md"
+authors = [
+    { name = "Ori Ashkenazi", email = "oriash94@gmail.com" },
+]
+keywords = ["pentest", "pivoting", "ssh-tunnel", "nmap", "red-team", "cybersecurity"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Framework :: Django",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Networking",
+]
+
+[project.urls]
+Homepage = "https://github.com/TarzEH/MudaleTunnel"
+Repository = "https://github.com/TarzEH/MudaleTunnel"
+Issues = "https://github.com/TarzEH/MudaleTunnel/issues"
+Changelog = "https://github.com/TarzEH/MudaleTunnel/blob/master/CHANGELOG.md"
 
 dependencies = [
     "pydantic>=2.10",

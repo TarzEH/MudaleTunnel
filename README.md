@@ -86,6 +86,26 @@ The map is evidence, not assumption.
 
 ---
 
+## How It Compares
+
+| Capability | MudaleTunnel | Chisel | Ligolo-ng | SSF | pwncat |
+|---|:---:|:---:|:---:|:---:|:---:|
+| SSH dynamic/local/remote tunnels | **Yes** | — | — | Yes | — |
+| TUN-based pivoting | **Yes** (Ligolo adapter) | — | **Yes** | — | — |
+| Built-in nmap scanning through tunnels | **Yes** | — | — | — | — |
+| Auto-discovery → auto-forward | **Yes** | — | — | — | — |
+| Interactive console (msfconsole-style) | **Yes** | — | — | — | Yes |
+| Web dashboard | **Yes** | — | — | — | — |
+| REST API / WebSocket | **Yes** | — | — | — | — |
+| Multi-operator support | **Yes** | — | — | — | — |
+| Engagement scope enforcement | **Yes** | — | — | — | — |
+| Standalone binary (no runtime) | **Yes** | **Yes** | **Yes** | **Yes** | — |
+| Docker image | **Yes** | **Yes** | — | — | — |
+
+MudaleTunnel is a **control plane** — it manages tunnels, scans, and forwards as a unified workflow. The other tools are point solutions that do one thing well. Use them together: MudaleTunnel can drive Ligolo-ng as a backend.
+
+---
+
 ## Features
 
 | | |
