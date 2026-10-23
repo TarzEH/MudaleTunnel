@@ -161,14 +161,13 @@ class SyncBridge:
                 try:
                     obj = Tunnel.objects.get(pk=remote_id)
                     obj.status = rec.status
-                    obj.desired_state = rec.desired_state
                     obj.pid = rec.pid
                     obj.last_error = rec.last_error
                     obj.restart_count = rec.restart_count
                     obj.started_at = _epoch_to_datetime(rec.started_at)
                     obj.stopped_at = _epoch_to_datetime(rec.stopped_at)
                     obj.save(update_fields=[
-                        "status", "desired_state", "pid", "last_error",
+                        "status", "pid", "last_error",
                         "restart_count", "started_at", "stopped_at", "updated_at",
                     ])
                     report.tunnels_updated += 1
