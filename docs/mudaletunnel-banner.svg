@@ -1,116 +1,179 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 220">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0a0a0a"/>
-      <stop offset="100%" style="stop-color:#1a0a0a"/>
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
     </linearGradient>
     <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#dc2626"/>
-      <stop offset="100%" style="stop-color:#ef4444"/>
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="50%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#ec4899"/>
     </linearGradient>
-    <linearGradient id="tunnelGlow" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#dc2626;stop-opacity:0.4"/>
-      <stop offset="50%" style="stop-color:#ef4444;stop-opacity:0.15"/>
-      <stop offset="100%" style="stop-color:#dc2626;stop-opacity:0.4"/>
+    <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.6"/>
+    </linearGradient>
+    <linearGradient id="nodeGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#0891b2"/>
+    </linearGradient>
+    <linearGradient id="nodeGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="nodeGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ec4899"/>
+      <stop offset="100%" stop-color="#db2777"/>
+    </linearGradient>
+    <linearGradient id="tagline" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#94a3b8"/>
+      <stop offset="100%" stop-color="#64748b"/>
     </linearGradient>
     <filter id="glow">
-      <feGaussianBlur stdDeviation="3" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <filter id="textGlow">
-      <feGaussianBlur stdDeviation="5" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="bigGlow">
+      <feGaussianBlur stdDeviation="20"/>
     </filter>
   </defs>
 
   <!-- Background -->
-  <rect width="900" height="220" fill="url(#bg)" rx="12"/>
+  <rect width="1280" height="640" fill="url(#bg)"/>
 
-  <!-- Subtle border -->
-  <rect width="900" height="220" fill="none" stroke="#2a1a1a" stroke-width="1" rx="12"/>
-
-  <!-- Tunnel visualization (left side) -->
-  <g opacity="0.12" stroke="#dc2626" fill="none">
-    <!-- Concentric tunnel rings -->
-    <ellipse cx="110" cy="110" rx="90" ry="90" stroke-width="0.6"/>
-    <ellipse cx="110" cy="110" rx="70" ry="70" stroke-width="0.8"/>
-    <ellipse cx="110" cy="110" rx="50" ry="50" stroke-width="1"/>
-    <ellipse cx="110" cy="110" rx="30" ry="30" stroke-width="1.2"/>
-    <!-- Radial lines -->
-    <line x1="110" y1="20" x2="110" y2="200" stroke-width="0.5"/>
-    <line x1="20" y1="110" x2="200" y2="110" stroke-width="0.5"/>
-    <line x1="46" y1="46" x2="174" y2="174" stroke-width="0.5"/>
-    <line x1="174" y1="46" x2="46" y2="174" stroke-width="0.5"/>
+  <!-- Grid pattern -->
+  <g opacity="0.04" stroke="#94a3b8" stroke-width="0.5">
+    <line x1="0" y1="80" x2="1280" y2="80"/><line x1="0" y1="160" x2="1280" y2="160"/>
+    <line x1="0" y1="240" x2="1280" y2="240"/><line x1="0" y1="320" x2="1280" y2="320"/>
+    <line x1="0" y1="400" x2="1280" y2="400"/><line x1="0" y1="480" x2="1280" y2="480"/>
+    <line x1="0" y1="560" x2="1280" y2="560"/>
+    <line x1="160" y1="0" x2="160" y2="640"/><line x1="320" y1="0" x2="320" y2="640"/>
+    <line x1="480" y1="0" x2="480" y2="640"/><line x1="640" y1="0" x2="640" y2="640"/>
+    <line x1="800" y1="0" x2="800" y2="640"/><line x1="960" y1="0" x2="960" y2="640"/>
+    <line x1="1120" y1="0" x2="1120" y2="640"/>
   </g>
 
-  <!-- Tunnel flow arrows (right side) -->
-  <g opacity="0.08" stroke="#ef4444" stroke-width="0.6" fill="none" transform="translate(720, 110)">
-    <ellipse cx="0" cy="0" rx="80" ry="80"/>
-    <ellipse cx="0" cy="0" rx="55" ry="55"/>
-    <ellipse cx="0" cy="0" rx="30" ry="30"/>
-    <line x1="0" y1="-80" x2="0" y2="80"/>
-    <line x1="-80" y1="0" x2="80" y2="0"/>
-  </g>
+  <!-- Left network visualization -->
+  <g transform="translate(200, 320)">
+    <!-- Outer rings -->
+    <ellipse cx="0" cy="0" rx="160" ry="160" fill="none" stroke="#06b6d4" stroke-width="0.5" opacity="0.08"/>
+    <ellipse cx="0" cy="0" rx="120" ry="120" fill="none" stroke="#8b5cf6" stroke-width="0.5" opacity="0.1"/>
+    <ellipse cx="0" cy="0" rx="80" ry="80" fill="none" stroke="#ec4899" stroke-width="0.6" opacity="0.12"/>
 
-  <!-- Network nodes -->
-  <g filter="url(#glow)">
-    <!-- Center node (SSH server) -->
-    <circle cx="110" cy="110" r="7" fill="#dc2626" opacity="0.9"/>
-    <!-- Client nodes -->
-    <circle cx="50" cy="50" r="3.5" fill="#ef4444" opacity="0.7"/>
-    <circle cx="170" cy="50" r="3.5" fill="#f97316" opacity="0.7"/>
-    <circle cx="50" cy="170" r="3.5" fill="#ef4444" opacity="0.7"/>
-    <circle cx="170" cy="170" r="3.5" fill="#f97316" opacity="0.7"/>
-    <circle cx="110" cy="35" r="3" fill="#fbbf24" opacity="0.6"/>
-    <circle cx="110" cy="185" r="3" fill="#fbbf24" opacity="0.6"/>
-    <circle cx="30" cy="110" r="3" fill="#ef4444" opacity="0.6"/>
-    <circle cx="190" cy="110" r="3" fill="#f97316" opacity="0.6"/>
-    <!-- Tunnel connections -->
-    <g stroke="#dc2626" stroke-width="1.2" opacity="0.3">
-      <line x1="110" y1="110" x2="50" y2="50"/>
-      <line x1="110" y1="110" x2="170" y2="50"/>
-      <line x1="110" y1="110" x2="50" y2="170"/>
-      <line x1="110" y1="110" x2="170" y2="170"/>
-      <line x1="110" y1="110" x2="110" y2="35"/>
-      <line x1="110" y1="110" x2="110" y2="185"/>
-      <line x1="110" y1="110" x2="30" y2="110"/>
-      <line x1="110" y1="110" x2="190" y2="110"/>
+    <!-- Connection lines -->
+    <g stroke="url(#lineGrad)" stroke-width="1.5" opacity="0.25">
+      <line x1="0" y1="0" x2="-100" y2="-80"/>
+      <line x1="0" y1="0" x2="90" y2="-100"/>
+      <line x1="0" y1="0" x2="-110" y2="70"/>
+      <line x1="0" y1="0" x2="100" y2="85"/>
+      <line x1="0" y1="0" x2="0" y2="-130"/>
+      <line x1="0" y1="0" x2="0" y2="130"/>
+      <line x1="0" y1="0" x2="-140" y2="0"/>
+      <line x1="0" y1="0" x2="140" y2="0"/>
+      <line x1="0" y1="0" x2="-60" y2="-130"/>
+      <line x1="0" y1="0" x2="60" y2="130"/>
+    </g>
+
+    <!-- Glow behind center -->
+    <circle cx="0" cy="0" r="30" fill="#8b5cf6" opacity="0.15" filter="url(#bigGlow)"/>
+
+    <!-- Nodes -->
+    <g filter="url(#glow)">
+      <!-- Center -->
+      <circle cx="0" cy="0" r="12" fill="url(#nodeGrad2)" opacity="0.95"/>
+      <circle cx="0" cy="0" r="5" fill="#e0e7ff" opacity="0.9"/>
+
+      <!-- Outer nodes -->
+      <circle cx="-100" cy="-80" r="6" fill="url(#nodeGrad1)" opacity="0.85"/>
+      <circle cx="90" cy="-100" r="6" fill="url(#nodeGrad1)" opacity="0.85"/>
+      <circle cx="-110" cy="70" r="5" fill="url(#nodeGrad3)" opacity="0.8"/>
+      <circle cx="100" cy="85" r="5" fill="url(#nodeGrad3)" opacity="0.8"/>
+      <circle cx="0" cy="-130" r="5" fill="url(#nodeGrad1)" opacity="0.75"/>
+      <circle cx="0" cy="130" r="5" fill="url(#nodeGrad3)" opacity="0.75"/>
+      <circle cx="-140" cy="0" r="4" fill="url(#nodeGrad1)" opacity="0.7"/>
+      <circle cx="140" cy="0" r="4" fill="url(#nodeGrad3)" opacity="0.7"/>
+      <circle cx="-60" cy="-130" r="4" fill="url(#nodeGrad2)" opacity="0.7"/>
+      <circle cx="60" cy="130" r="4" fill="url(#nodeGrad2)" opacity="0.7"/>
+    </g>
+
+    <!-- Lock icon on center -->
+    <g transform="translate(-7, -10)" fill="none" stroke="#e0e7ff" stroke-width="1.5" opacity="0.8">
+      <rect x="2" y="8" width="10" height="8" rx="1.5" fill="#8b5cf6" fill-opacity="0.3"/>
+      <path d="M 4,8 L 4,5 C 4,2 10,2 10,5 L 10,8" stroke-width="1.8" stroke-linecap="round"/>
     </g>
   </g>
 
-  <!-- Lock/tunnel icon -->
-  <g transform="translate(96, 93)" fill="none" stroke="#dc2626" stroke-width="2" opacity="0.85">
-    <!-- Padlock body -->
-    <rect x="4" y="14" width="20" height="16" rx="3" fill="#dc2626" fill-opacity="0.15"/>
-    <!-- Padlock shackle -->
-    <path d="M 8,14 L 8,9 C 8,4 20,4 20,9 L 20,14" stroke-width="2.5" stroke-linecap="round"/>
-    <!-- Keyhole -->
-    <circle cx="14" cy="22" r="2.5" fill="#dc2626" opacity="0.6"/>
-    <line x1="14" y1="24" x2="14" y2="27" stroke-width="2" stroke-linecap="round" stroke="#dc2626" opacity="0.6"/>
+  <!-- Right side tunnel visualization -->
+  <g transform="translate(1080, 320)" opacity="0.06">
+    <ellipse cx="0" cy="0" rx="140" ry="140" fill="none" stroke="#ec4899" stroke-width="0.8"/>
+    <ellipse cx="0" cy="0" rx="100" ry="100" fill="none" stroke="#8b5cf6" stroke-width="0.8"/>
+    <ellipse cx="0" cy="0" rx="60" ry="60" fill="none" stroke="#06b6d4" stroke-width="0.8"/>
+    <line x1="0" y1="-140" x2="0" y2="140" stroke="#94a3b8" stroke-width="0.5"/>
+    <line x1="-140" y1="0" x2="140" y2="0" stroke="#94a3b8" stroke-width="0.5"/>
   </g>
 
-  <!-- Main title -->
-  <text x="250" y="100" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="52" font-weight="800" letter-spacing="-1" filter="url(#textGlow)">
-    <tspan fill="#e6edf3">Mudale</tspan><tspan fill="url(#accent)">Tunnel</tspan>
-  </text>
-
-  <!-- Tagline -->
-  <text x="253" y="135" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="17" fill="#6b7280" font-weight="400" letter-spacing="2">
-    RED TEAM SSH TUNNEL MANAGEMENT
+  <!-- Title -->
+  <text x="640" y="260" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="84" font-weight="800" text-anchor="middle" letter-spacing="-2" filter="url(#softGlow)">
+    <tspan fill="#f1f5f9">Mudale</tspan><tspan fill="url(#accent)">Tunnel</tspan>
   </text>
 
   <!-- Accent line -->
-  <rect x="250" y="148" width="100" height="2" fill="url(#accent)" rx="1" opacity="0.6"/>
+  <rect x="490" y="285" width="300" height="3" fill="url(#accent)" rx="1.5" opacity="0.7"/>
+
+  <!-- Tagline -->
+  <text x="640" y="330" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="22" fill="url(#tagline)" text-anchor="middle" font-weight="400" letter-spacing="4">
+    NETWORK PIVOTING CONTROL PLANE
+  </text>
+
+  <!-- Feature pills -->
+  <g font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="13" font-weight="500" text-anchor="middle">
+    <!-- SSH Tunnels -->
+    <g transform="translate(390, 380)">
+      <rect x="-55" y="-14" width="110" height="28" rx="14" fill="#06b6d4" fill-opacity="0.1" stroke="#06b6d4" stroke-opacity="0.25" stroke-width="1"/>
+      <text y="4" fill="#06b6d4">SSH Tunnels</text>
+    </g>
+    <!-- Nmap Scans -->
+    <g transform="translate(540, 380)">
+      <rect x="-55" y="-14" width="110" height="28" rx="14" fill="#8b5cf6" fill-opacity="0.1" stroke="#8b5cf6" stroke-opacity="0.25" stroke-width="1"/>
+      <text y="4" fill="#8b5cf6">Nmap Scans</text>
+    </g>
+    <!-- Auto-Pivot -->
+    <g transform="translate(690, 380)">
+      <rect x="-50" y="-14" width="100" height="28" rx="14" fill="#ec4899" fill-opacity="0.1" stroke="#ec4899" stroke-opacity="0.25" stroke-width="1"/>
+      <text y="4" fill="#ec4899">Auto-Pivot</text>
+    </g>
+    <!-- Dashboard -->
+    <g transform="translate(835, 380)">
+      <rect x="-50" y="-14" width="100" height="28" rx="14" fill="#f59e0b" fill-opacity="0.1" stroke="#f59e0b" stroke-opacity="0.25" stroke-width="1"/>
+      <text y="4" fill="#f59e0b">Dashboard</text>
+    </g>
+  </g>
+
+  <!-- Console preview snippet -->
+  <g transform="translate(420, 430)" font-family="'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="13">
+    <rect x="0" y="0" width="440" height="110" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1" opacity="0.8"/>
+    <!-- Terminal dots -->
+    <circle cx="16" cy="14" r="4" fill="#ef4444" opacity="0.7"/>
+    <circle cx="30" cy="14" r="4" fill="#f59e0b" opacity="0.7"/>
+    <circle cx="44" cy="14" r="4" fill="#22c55e" opacity="0.7"/>
+    <!-- Terminal content -->
+    <text x="16" y="44" fill="#06b6d4" opacity="0.8">$</text>
+    <text x="30" y="44" fill="#e2e8f0" opacity="0.7">mudale console</text>
+    <text x="16" y="64" fill="#8b5cf6" opacity="0.7">mudale &gt;</text>
+    <text x="90" y="64" fill="#e2e8f0" opacity="0.6">use tunnel/ssh_dynamic</text>
+    <text x="16" y="84" fill="#8b5cf6" opacity="0.7">mudale &gt;</text>
+    <text x="90" y="84" fill="#22c55e" opacity="0.6">run</text>
+    <text x="16" y="100" fill="#22c55e" opacity="0.5">  [+] SOCKS proxy listening on 127.0.0.1:1080</text>
+  </g>
 
   <!-- Version badge -->
-  <g transform="translate(795, 20)">
-    <rect width="75" height="24" rx="12" fill="#dc2626" fill-opacity="0.1" stroke="#dc2626" stroke-opacity="0.3" stroke-width="1"/>
-    <text x="37" y="16" font-family="system-ui, sans-serif" font-size="11" fill="#dc2626" text-anchor="middle" font-weight="600">v3.1.0</text>
+  <g transform="translate(1170, 30)">
+    <rect width="80" height="28" rx="14" fill="#8b5cf6" fill-opacity="0.15" stroke="#8b5cf6" stroke-opacity="0.3" stroke-width="1"/>
+    <text x="40" y="18" font-family="system-ui, sans-serif" font-size="12" fill="#a78bfa" text-anchor="middle" font-weight="600">v3.1.0</text>
   </g>
 </svg>
