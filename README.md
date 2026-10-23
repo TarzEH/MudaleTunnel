@@ -32,18 +32,12 @@
 ## Demo
 
 <p align="center">
-  <img src="docs/demo.gif" alt="MudaleTunnel CLI demo" width="900">
+  <img src="docs/demo.svg" alt="mudale console — interactive session" width="880">
 </p>
 
 <p align="center">
   <em>Real commands, invented data — every address in the recording is fiction.</em>
 </p>
-
-<!-- Placeholder: record a console-mode session and add it here
-<p align="center">
-  <img src="docs/demo-console.gif" alt="mudale console" width="900">
-</p>
--->
 
 ---
 
