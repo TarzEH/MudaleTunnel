@@ -25,7 +25,7 @@ def spec() -> dict:
 
 @pytest.fixture
 def client(operator, engagement):
-    EngagementMembership.objects.create(engagement=engagement, operator=operator)
+    EngagementMembership.objects.get_or_create(engagement=engagement, operator=operator)
     api = APIClient()
     api.force_authenticate(user=operator)
     return api

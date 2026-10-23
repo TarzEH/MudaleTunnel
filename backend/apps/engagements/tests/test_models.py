@@ -114,7 +114,7 @@ def test_slug_is_unique(engagement, operator):
 
 
 def test_operator_cannot_be_added_to_an_engagement_twice(engagement, operator):
-    EngagementMembership.objects.create(engagement=engagement, operator=operator)
+    # The engagement fixture already adds operator as LEAD — a second insert must fail.
     with pytest.raises(IntegrityError), transaction.atomic():
         EngagementMembership.objects.create(engagement=engagement, operator=operator)
 
@@ -137,9 +137,10 @@ def test_admin_sees_every_engagement(engagement, django_user_model):
     assert list(Engagement.objects.visible_to(admin)) == [engagement]
 
 
-def test_observer_cannot_mutate(engagement, operator):
+def test_observer_cannot_mutate(engagement, django_user_model):
+    observer = django_user_model.objects.create_user(username="watcher", password="x" * 16)
     membership = EngagementMembership.objects.create(
-        engagement=engagement, operator=operator, role=MembershipRole.OBSERVER
+        engagement=engagement, operator=observer, role=MembershipRole.OBSERVER
     )
     assert membership.can_mutate is False
 
