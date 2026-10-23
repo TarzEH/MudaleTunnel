@@ -13,7 +13,7 @@ import logging
 from django.contrib.auth import authenticate, login, logout
 from django.db.models import Count
 from django.utils import timezone
-from rest_framework import status, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, authentication_classes, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -88,7 +88,14 @@ class EngagementViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
+        from apps.engagements.models import EngagementMembership, MembershipRole
+
         engagement = serializer.save(created_by=self.request.user)
+        EngagementMembership.objects.create(
+            engagement=engagement,
+            operator=self.request.user,
+            role=MembershipRole.LEAD,
+        )
         record(
             AuditAction.ENGAGEMENT_CREATED,
             engagement=engagement,
@@ -133,6 +140,11 @@ class AgentViewSet(EngagementScopedMixin, viewsets.ModelViewSet):
     search_fields = ["name", "hostname", "remote_host"]
 
     def perform_create(self, serializer):
+        engagement = serializer.validated_data["engagement"]
+        if not Engagement.objects.visible_to(self.request.user).filter(pk=engagement.pk).exists():
+            from rest_framework.exceptions import PermissionDenied as DRFPermissionDenied
+
+            raise DRFPermissionDenied("You are not a member of that engagement.")
         agent = serializer.save(created_by=self.request.user)
         record(
             AuditAction.AGENT_REGISTERED,
@@ -148,7 +160,6 @@ class AgentViewSet(EngagementScopedMixin, viewsets.ModelViewSet):
 class TunnelViewSet(EngagementScopedMixin, viewsets.ModelViewSet):
     queryset = (
         Tunnel.objects.select_related("engagement", "agent", "created_by")
-        .prefetch_related("logs")
         .order_by("-created_at")
     )
     serializer_class = TunnelSerializer
@@ -233,13 +244,20 @@ class TunnelViewSet(EngagementScopedMixin, viewsets.ModelViewSet):
     def auto_expose(self, request, pk=None):
         """Turn everything this pivot found into local forwards."""
         tunnel = self.get_object()
+        raw_sensitive = request.data.get("include_sensitive", False)
+        include_sensitive = (
+            raw_sensitive is True
+            or str(raw_sensitive).lower() in ("true", "1", "yes")
+        )
+        raw_limit = request.data.get("limit", 20)
+        limit = max(1, min(int(raw_limit), 100))
         created = pivot.auto_expose(
             tunnel.engagement,
             tunnel=tunnel,
             operator=request.user,
             ports=request.data.get("ports"),
-            include_sensitive=bool(request.data.get("include_sensitive")),
-            limit=int(request.data.get("limit", 20)),
+            include_sensitive=include_sensitive,
+            limit=limit,
         )
         return Response(
             {"created": TunnelSerializer(created, many=True).data, "count": len(created)},
@@ -257,7 +275,13 @@ class TunnelViewSet(EngagementScopedMixin, viewsets.ModelViewSet):
 # ── Scans ───────────────────────────────────────────────────────────────
 
 
-class ScanViewSet(EngagementScopedMixin, viewsets.ModelViewSet):
+class ScanViewSet(
+    EngagementScopedMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.ListModelMixin,
+    viewsets.GenericViewSet,
+):
     queryset = Scan.objects.select_related("engagement", "requested_by").order_by("-queued_at")
     serializer_class = ScanSerializer
     permission_classes = [IsOperatorOrReadOnly]
@@ -269,12 +293,24 @@ class ScanViewSet(EngagementScopedMixin, viewsets.ModelViewSet):
         payload.is_valid(raise_exception=True)
         data = payload.validated_data
 
+        engagement = data["engagement"]
+        if not Engagement.objects.visible_to(request.user).filter(pk=engagement.pk).exists():
+            from rest_framework.exceptions import PermissionDenied as DRFPermissionDenied
+
+            raise DRFPermissionDenied("You are not a member of that engagement.")
+
+        via_tunnel = data.get("via_tunnel")
+        if via_tunnel and via_tunnel.engagement_id != engagement.pk:
+            from rest_framework.exceptions import ValidationError as DRFValidationError
+
+            raise DRFValidationError({"via_tunnel": "Tunnel does not belong to this engagement."})
+
         scan = scan_services.request_scan(
-            engagement=data["engagement"],
+            engagement=engagement,
             target=data["target"],
             profile=data["profile"],
             operator=request.user,
-            via_tunnel=data.get("via_tunnel"),
+            via_tunnel=via_tunnel,
         )
         return Response(ScanSerializer(scan).data, status=status.HTTP_201_CREATED)
 
@@ -403,6 +439,17 @@ def me(request):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def login_view(request):
+    from rest_framework.throttling import AnonRateThrottle
+
+    class LoginThrottle(AnonRateThrottle):
+        rate = "5/min"
+
+    for throttle in [LoginThrottle()]:
+        if not throttle.allow_request(request, None):
+            from rest_framework.exceptions import Throttled
+
+            raise Throttled(throttle.wait())
+
     username = request.data.get("username", "")
     password = request.data.get("password", "")
     user = authenticate(request, username=username, password=password)
@@ -472,7 +519,6 @@ def bootstrap(request):
     return Response(
         {
             "demo_credentials": django_settings.DEMO_CREDENTIALS,
-            "demo_suppressed": django_settings.DEMO_CREDENTIALS_SUPPRESSED,
         }
     )
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from './client';
 import type {
   Agent,
@@ -38,11 +38,10 @@ function useList<T>(path: string | null, query?: QueryParams) {
     error: null,
   });
   const queryKey = JSON.stringify(query ?? {});
-  const reloadToken = useRef(0);
+  const [reloadCount, setReloadCount] = useState(0);
 
   const reload = useCallback(() => {
-    reloadToken.current += 1;
-    setState((s) => ({ ...s, loading: true }));
+    setReloadCount((n) => n + 1);
   }, []);
 
   useEffect(() => {
@@ -53,7 +52,7 @@ function useList<T>(path: string | null, query?: QueryParams) {
     const controller = new AbortController();
     setState((s) => ({ ...s, loading: true, error: null }));
     api
-      .get<Paginated<T>>(path, query, controller.signal)
+      .get<Paginated<T>>(path, { ...query, limit: 10000 }, controller.signal)
       .then((data) => setState({ data, loading: false, error: null }))
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -61,7 +60,7 @@ function useList<T>(path: string | null, query?: QueryParams) {
       });
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, queryKey, reloadToken.current]);
+  }, [path, queryKey, reloadCount]);
 
   return {
     items: state.data?.results ?? [],
@@ -75,11 +74,10 @@ function useList<T>(path: string | null, query?: QueryParams) {
 function useItem<T>(path: string | null, query?: QueryParams) {
   const [state, setState] = useState<AsyncState<T>>({ data: null, loading: true, error: null });
   const queryKey = JSON.stringify(query ?? {});
-  const reloadToken = useRef(0);
+  const [reloadCount, setReloadCount] = useState(0);
 
   const reload = useCallback(() => {
-    reloadToken.current += 1;
-    setState((s) => ({ ...s, loading: true }));
+    setReloadCount((n) => n + 1);
   }, []);
 
   useEffect(() => {
@@ -98,7 +96,7 @@ function useItem<T>(path: string | null, query?: QueryParams) {
       });
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, queryKey, reloadToken.current]);
+  }, [path, queryKey, reloadCount]);
 
   return { data: state.data, loading: state.loading, error: state.error, reload, setState };
 }

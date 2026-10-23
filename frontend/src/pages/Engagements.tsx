@@ -98,8 +98,13 @@ export function Engagements() {
 
   async function handleDelete(engagement: Engagement) {
     if (!window.confirm(`Delete engagement "${engagement.name}"? This cannot be undone.`)) return;
-    await deleteEngagement(engagement.id);
-    reload();
+    try {
+      await deleteEngagement(engagement.id);
+      reload();
+    } catch (err) {
+      console.error('Failed to delete engagement', err);
+      setError(err instanceof ApiError ? err.detail : 'Failed to delete engagement.');
+    }
   }
 
   return (

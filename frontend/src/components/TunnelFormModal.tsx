@@ -27,6 +27,11 @@ const KIND_OPTIONS: { value: TunnelKind; label: string; hint: string }[] = [
     label: 'Reverse SOCKS (-R)',
     hint: 'Reverse SOCKS. Needs OpenSSH 7.6+ on both ends.',
   },
+  {
+    value: 'ligolo',
+    label: 'ligolo-ng (TUN)',
+    hint: 'Full IP-layer pivoting via TUN interface. Needs agent on the target and root on the operator.',
+  },
 ];
 
 /**
@@ -39,6 +44,7 @@ const SPEC_FIELDS: Record<TunnelKind, SpecField[]> = {
   ssh_dynamic: ['local_bind', 'local_port'],
   ssh_remote: ['remote_bind', 'remote_port', 'target_host', 'target_port'],
   ssh_remote_dynamic: ['remote_bind', 'remote_port'],
+  ligolo: ['agent_addr', 'listen_port', 'tun_name', 'laddr'],
 };
 
 type SpecField =
@@ -47,7 +53,11 @@ type SpecField =
   | 'remote_bind'
   | 'remote_port'
   | 'target_host'
-  | 'target_port';
+  | 'target_port'
+  | 'agent_addr'
+  | 'listen_port'
+  | 'tun_name'
+  | 'laddr';
 
 const FIELD_LABELS: Record<SpecField, string> = {
   local_bind: 'Local bind',
@@ -56,12 +66,20 @@ const FIELD_LABELS: Record<SpecField, string> = {
   remote_port: 'Remote port',
   target_host: 'Target host',
   target_port: 'Target port',
+  agent_addr: 'Agent address',
+  listen_port: 'Listen port',
+  tun_name: 'TUN interface',
+  laddr: 'Listen address',
 };
 
 const FIELD_HINTS: Partial<Record<SpecField, string>> = {
   local_bind: '127.0.0.1 keeps it on this machine. 0.0.0.0 exposes it to your network.',
   remote_bind: 'Bind address on the remote host. Must be a literal IP.',
   target_host: 'Must be inside the engagement scope.',
+  agent_addr: 'IP where the ligolo agent connects from.',
+  listen_port: 'Port the proxy listens on for agent callbacks (default: 11601).',
+  tun_name: 'Name for the TUN interface created on this machine.',
+  laddr: '0.0.0.0 accepts agents from any interface.',
 };
 
 interface SpecState {
@@ -71,6 +89,10 @@ interface SpecState {
   remote_port: string;
   target_host: string;
   target_port: string;
+  agent_addr: string;
+  listen_port: string;
+  tun_name: string;
+  laddr: string;
 }
 
 const EMPTY_SPEC: SpecState = {
@@ -80,6 +102,10 @@ const EMPTY_SPEC: SpecState = {
   remote_port: '',
   target_host: '',
   target_port: '',
+  agent_addr: '',
+  listen_port: '11601',
+  tun_name: 'ligolo',
+  laddr: '0.0.0.0',
 };
 
 export interface TunnelPrefill {
@@ -143,27 +169,40 @@ export function TunnelFormModal({
   const visibleFields = SPEC_FIELDS[kind] ?? [];
   const selectedKind = KIND_OPTIONS.find((option) => option.value === kind);
 
+  const isLigolo = kind === 'ligolo';
+
   async function handleSubmit() {
     setError(null);
-    if (!sshUser.trim() || !sshHost.trim()) {
-      setError('SSH user and host are required — they are how the tunnel is carried.');
-      return;
-    }
 
-    const specPayload: Record<string, unknown> = {
-      endpoint: {
+    const specPayload: Record<string, unknown> = {};
+
+    if (isLigolo) {
+      if (!spec.agent_addr.trim()) {
+        setError('Agent address is required — the IP the ligolo agent connects from.');
+        return;
+      }
+    } else {
+      if (!sshUser.trim() || !sshHost.trim()) {
+        setError('SSH user and host are required — they are how the tunnel is carried.');
+        return;
+      }
+      specPayload.endpoint = {
         user: sshUser.trim(),
         host: sshHost.trim(),
         port: Number(sshPort) || 22,
         ...(identityFile.trim() ? { identity_file: identityFile.trim() } : {}),
         ...(acceptNewHostKey ? { strict_host_key_checking: false } : {}),
-      },
-    };
+      };
+    }
 
     for (const field of visibleFields) {
       const raw = spec[field];
       if (!raw) continue;
       specPayload[field] = field.endsWith('port') ? Number(raw) : raw;
+    }
+
+    if (isLigolo) {
+      specPayload.selfcert = true;
     }
 
     setSubmitting(true);
@@ -208,7 +247,7 @@ export function TunnelFormModal({
           </Select>
         </Field>
 
-        <fieldset className="rounded-md border border-subtle p-3">
+        {!isLigolo && <fieldset className="rounded-md border border-subtle p-3">
           <legend className="px-1 text-xs font-medium text-text-muted">SSH endpoint</legend>
           <div className="grid grid-cols-2 gap-3">
             <Field label="User">
@@ -218,7 +257,7 @@ export function TunnelFormModal({
               <TextInput value={sshHost} onChange={(e) => setSshHost(e.target.value)} placeholder="10.4.0.10" mono />
             </Field>
             <Field label="Port">
-              <TextInput value={sshPort} onChange={(e) => setSshPort(e.target.value)} placeholder="22" mono />
+              <TextInput value={sshPort} onChange={(e) => setSshPort(e.target.value)} placeholder="22" mono type="number" min={1} max={65535} />
             </Field>
             <Field label="Identity file" hint="Absolute path on the engine host.">
               <TextInput
@@ -238,23 +277,27 @@ export function TunnelFormModal({
             />
             Accept an unknown host key on first connect
           </label>
-        </fieldset>
+        </fieldset>}
 
         {visibleFields.length > 0 && (
           <fieldset className="rounded-md border border-subtle p-3">
-            <legend className="px-1 text-xs font-medium text-text-muted">Forwarding</legend>
+            <legend className="px-1 text-xs font-medium text-text-muted">{isLigolo ? 'ligolo-ng proxy' : 'Forwarding'}</legend>
             <div className="grid grid-cols-2 gap-3">
-              {visibleFields.map((field) => (
-                <Field key={field} label={FIELD_LABELS[field]} hint={FIELD_HINTS[field]}>
-                  <TextInput
-                    value={spec[field]}
-                    onChange={(e) =>
-                      setSpec((prev) => ({ ...prev, [field]: e.target.value }))
-                    }
-                    mono
-                  />
-                </Field>
-              ))}
+              {visibleFields.map((field) => {
+                const isPort = field.endsWith('_port');
+                return (
+                  <Field key={field} label={FIELD_LABELS[field]} hint={FIELD_HINTS[field]}>
+                    <TextInput
+                      value={spec[field]}
+                      onChange={(e) =>
+                        setSpec((prev) => ({ ...prev, [field]: e.target.value }))
+                      }
+                      mono
+                      {...(isPort ? { type: 'number', min: 1, max: 65535 } : {})}
+                    />
+                  </Field>
+                );
+              })}
             </div>
           </fieldset>
         )}

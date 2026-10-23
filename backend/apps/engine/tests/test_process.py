@@ -14,7 +14,7 @@ import time
 
 import pytest
 
-from apps.engine.process import ProcessState, SupervisedProcess, is_pid_alive
+from mudale_engine.process import ProcessState, SupervisedProcess, is_pid_alive
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX process semantics")
 

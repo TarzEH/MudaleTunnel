@@ -35,12 +35,7 @@ from apps.api import broadcast
 from apps.audit.context import AuditContext, using
 from apps.audit.models import AuditAction
 from apps.audit.services import record
-from apps.engine.adapters.base import AdapterUnavailable
-from apps.engine.adapters.nmap import NmapAdapter
-from apps.engine.adapters.ssh import SshAdapter
 from apps.engine.models import EngineInstance
-from apps.engine.process import SupervisedProcess, is_pid_alive
-from apps.engine.specs import SpecError, parse_spec
 from apps.scans import services as scan_services
 from apps.scans.models import Scan, ScanStatus
 from apps.scans.parsers import NmapParseError, parse_nmap_xml
@@ -54,6 +49,11 @@ from apps.tunnels.models import (
     TunnelStatus,
 )
 from mudale import __version__ as VERSION
+from mudale_engine.adapters.base import AdapterUnavailable
+from mudale_engine.adapters.nmap import NmapAdapter
+from mudale_engine.adapters.ssh import SshAdapter
+from mudale_engine.process import SupervisedProcess, is_pid_alive
+from mudale_engine.specs import SpecError, parse_spec
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +89,7 @@ class RunningScan:
     scan_id: int
     process: SupervisedProcess
     started_at: float = field(default_factory=time.monotonic)
+    cleanup_files: list[str] = field(default_factory=list)
 
 
 class Supervisor:
@@ -98,8 +99,9 @@ class Supervisor:
         self.instance_id = instance_id or f"{socket.gethostname()}-{uuid.uuid4().hex[:8]}"
         self.config = settings.ENGINE
 
-        self.ssh = SshAdapter(self.config["SSH_BIN"])
-        self.nmap = NmapAdapter(self.config["NMAP_BIN"])
+        state_dir = self.config["LOG_DIR"]
+        self.ssh = SshAdapter(self.config["SSH_BIN"], state_dir=state_dir)
+        self.nmap = NmapAdapter(self.config["NMAP_BIN"], state_dir=state_dir)
 
         self.tunnels: dict[int, RunningTunnel] = {}
         self.scans: dict[int, RunningScan] = {}
@@ -485,7 +487,9 @@ class Supervisor:
             broadcast.scan_updated(scan)
             return
 
-        self.scans[scan.pk] = RunningScan(scan_id=scan.pk, process=process)
+        self.scans[scan.pk] = RunningScan(
+            scan_id=scan.pk, process=process, cleanup_files=plan.cleanup_files,
+        )
 
         scan.status = ScanStatus.RUNNING
         scan.pid = pid
@@ -519,6 +523,11 @@ class Supervisor:
             if time.monotonic() - running.started_at > timeout:
                 running.process.stop(grace_seconds=5)
                 self.scans.pop(scan_id, None)
+                for path in running.cleanup_files:
+                    try:
+                        os.unlink(path)
+                    except OSError:
+                        pass
                 scan = Scan.objects.filter(pk=scan_id).first()
                 if scan:
                     scan_services.mark_failed(
@@ -534,6 +543,11 @@ class Supervisor:
                 continue
 
             self.scans.pop(scan_id, None)
+            for path in running.cleanup_files:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
             scan = Scan.objects.filter(pk=scan_id).select_related("engagement").first()
             if scan is None:
                 continue

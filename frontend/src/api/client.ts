@@ -96,6 +96,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const isJson = contentType.includes('application/json');
   const data = isJson ? await res.json().catch(() => null) : null;
 
+  if (res.status === 401) {
+    const hasSession = !!getStoredApiKey() || !!readCookie('sessionid');
+    if (hasSession) {
+      setStoredApiKey(null);
+      window.location.href = '/login';
+    }
+  }
+
   if (!res.ok) {
     let detail = `Request failed with status ${res.status}`;
     let fieldErrors: Record<string, unknown> | null = null;

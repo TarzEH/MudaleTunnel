@@ -12,35 +12,15 @@ from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
-
-class ScanProfile(models.TextChoices):
-    """Named nmap argument sets.
-
-    Operators pick a profile; they never supply raw nmap flags. The mapping from
-    profile to argv lives in the engine (``apps.engine.adapters.nmap``) so that
-    the only user-controlled value reaching the command line is a target that has
-    already been parsed into an ``ipaddress`` object.
-    """
-
-    DISCOVERY = "discovery", "Host discovery (ping sweep)"
-    QUICK = "quick", "Quick (top 100 ports)"
-    STANDARD = "standard", "Standard (top 1000 + versions)"
-    FULL = "full", "Full (all TCP ports + versions)"
-    UDP_TOP = "udp_top", "UDP (top 100 ports)"
-
-
-class ScanStatus(models.TextChoices):
-    QUEUED = "queued", "Queued"
-    RUNNING = "running", "Running"
-    COMPLETED = "completed", "Completed"
-    FAILED = "failed", "Failed"
-    CANCELLED = "cancelled", "Cancelled"
-    TIMED_OUT = "timed_out", "Timed out"
-
-
-TERMINAL_SCAN_STATUSES = frozenset(
-    {ScanStatus.COMPLETED, ScanStatus.FAILED, ScanStatus.CANCELLED, ScanStatus.TIMED_OUT}
+from mudale_engine.enums import (
+    SCAN_PROFILE_LABELS,
+    TERMINAL_SCAN_STATUSES,
+    ScanProfile,
+    ScanStatus,
 )
+
+_SCAN_PROFILE_CHOICES = [(p.value, SCAN_PROFILE_LABELS[p]) for p in ScanProfile]
+_SCAN_STATUS_CHOICES = [(s.value, s.value.replace("_", " ").title()) for s in ScanStatus]
 
 
 class ScanQuerySet(models.QuerySet):
@@ -59,7 +39,7 @@ class Scan(models.Model):
     # stored is what the engine will run — not the raw operator input.
     target = models.CharField(max_length=64)
     profile = models.CharField(
-        max_length=16, choices=ScanProfile.choices, default=ScanProfile.STANDARD
+        max_length=16, choices=_SCAN_PROFILE_CHOICES, default=ScanProfile.STANDARD
     )
     via_tunnel = models.ForeignKey(
         "tunnels.Tunnel",
@@ -71,7 +51,7 @@ class Scan(models.Model):
     )
 
     status = models.CharField(
-        max_length=16, choices=ScanStatus.choices, default=ScanStatus.QUEUED, db_index=True
+        max_length=16, choices=_SCAN_STATUS_CHOICES, default=ScanStatus.QUEUED, db_index=True
     )
     owner_engine_id = models.CharField(max_length=64, blank=True)
     pid = models.IntegerField(null=True, blank=True)

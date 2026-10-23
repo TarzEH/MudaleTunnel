@@ -7,9 +7,9 @@ import pytest
 from apps.accounts.models import Role
 from apps.audit.models import AuditAction, AuditEvent, AuditResult
 from apps.engagements.scope import OutOfScope, ScopeViolation
-from apps.engine.specs import SpecError
 from apps.tunnels import services
 from apps.tunnels.models import DesiredState, Tunnel, TunnelKind, TunnelStatus
+from mudale_engine.specs import SpecError
 
 pytestmark = pytest.mark.django_db
 

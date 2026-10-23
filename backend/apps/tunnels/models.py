@@ -21,41 +21,17 @@ from __future__ import annotations
 from django.conf import settings
 from django.db import models
 
-
-class TunnelKind(models.TextChoices):
-    # SSH local forward: -L local_port:target_host:target_port
-    SSH_LOCAL = "ssh_local", "SSH local forward"
-    # SSH dynamic forward (SOCKS): -D local_port
-    SSH_DYNAMIC = "ssh_dynamic", "SSH SOCKS proxy"
-    # SSH remote forward: -R bind:remote_port:target_host:target_port
-    SSH_REMOTE = "ssh_remote", "SSH reverse forward"
-    # SSH remote dynamic (reverse SOCKS, OpenSSH 7.6+): -R bind:port
-    SSH_REMOTE_DYNAMIC = "ssh_remote_dynamic", "SSH reverse SOCKS"
-
-
-class DesiredState(models.TextChoices):
-    UP = "up", "Up"
-    DOWN = "down", "Down"
-
-
-class TunnelStatus(models.TextChoices):
-    PENDING = "pending", "Pending"
-    STARTING = "starting", "Starting"
-    ACTIVE = "active", "Active"
-    # Process alive but a health check is failing (port not listening, etc).
-    DEGRADED = "degraded", "Degraded"
-    STOPPING = "stopping", "Stopping"
-    STOPPED = "stopped", "Stopped"
-    FAILED = "failed", "Failed"
-
-
-#: Statuses from which the engine considers the tunnel to be occupying a process.
-LIVE_STATUSES = frozenset(
-    {TunnelStatus.STARTING, TunnelStatus.ACTIVE, TunnelStatus.DEGRADED, TunnelStatus.STOPPING}
+from mudale_engine.enums import (
+    LIVE_STATUSES,
+    TUNNEL_KIND_LABELS,
+    DesiredState,
+    TunnelKind,
+    TunnelStatus,
 )
 
-#: Statuses after which no further transition is expected without operator action.
-TERMINAL_STATUSES = frozenset({TunnelStatus.STOPPED, TunnelStatus.FAILED})
+_TUNNEL_KIND_CHOICES = [(k.value, TUNNEL_KIND_LABELS[k]) for k in TunnelKind]
+_DESIRED_STATE_CHOICES = [(s.value, s.value.title()) for s in DesiredState]
+_TUNNEL_STATUS_CHOICES = [(s.value, s.value.title()) for s in TunnelStatus]
 
 
 class TunnelQuerySet(models.QuerySet):
@@ -82,19 +58,19 @@ class Tunnel(models.Model):
         blank=True,
         help_text="The foothold this tunnel runs through. Null for a direct SSH tunnel.",
     )
-    kind = models.CharField(max_length=32, choices=TunnelKind.choices)
+    kind = models.CharField(max_length=32, choices=_TUNNEL_KIND_CHOICES)
     label = models.CharField(max_length=128, blank=True)
 
     # ── Desired (written by the web tier) ───────────────────────────────
     desired_state = models.CharField(
-        max_length=8, choices=DesiredState.choices, default=DesiredState.UP, db_index=True
+        max_length=8, choices=_DESIRED_STATE_CHOICES, default=DesiredState.UP, db_index=True
     )
-    # Engine-specific, schema-validated parameters. See apps.engine.specs.
+    # Engine-specific, schema-validated parameters. See mudale_engine.specs.
     spec = models.JSONField(default=dict)
 
     # ── Observed (written by the engine daemon only) ────────────────────
     status = models.CharField(
-        max_length=16, choices=TunnelStatus.choices, default=TunnelStatus.PENDING, db_index=True
+        max_length=16, choices=_TUNNEL_STATUS_CHOICES, default=TunnelStatus.PENDING, db_index=True
     )
     # PID of the process the engine actually supervises. Because no adapter uses
     # a self-backgrounding flag (ssh -f and friends), this PID stays valid for

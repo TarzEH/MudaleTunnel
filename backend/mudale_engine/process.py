@@ -1,24 +1,20 @@
 """Supervised child processes.
 
-The engine owns every process it starts, for that process's whole life. The
+The engine owns every process it starts, for that process's whole life.  The
 rules that make that true:
 
-* **Own process group.** Each child is started with ``start_new_session=True``,
-  so it becomes a process-group leader. Stopping signals the *group*, which
-  catches any helper the child forked (ssh's multiplexing, nmap's workers)
-  rather than leaving strays behind.
-* **No self-backgrounding.** Adapters never emit flags like ``ssh -f``, so the
+* **Own process group.**  Each child is started with ``start_new_session=True``,
+  so it becomes a process-group leader.  Stopping signals the *group*, which
+  catches any helper the child forked rather than leaving strays behind.
+* **No self-backgrounding.**  Adapters never emit flags like ``ssh -f``, so the
   PID recorded here is the process that carries the tunnel, and it stays valid.
-* **Reaped exactly once.** ``poll()`` reaps, and a reaped PID can be reused by
-  the OS for an unrelated process. Signalling a stale PID is how you kill
-  something you did not start, so the exit status is latched on first
-  observation and never re-derived.
-* **Escalation with a deadline.** SIGTERM, then SIGKILL after a grace period.
+* **Reaped exactly once.**  ``poll()`` reaps, and a reaped PID can be reused by
+  the OS.  The exit status is latched on first observation and never re-derived.
+* **Escalation with a deadline.**  SIGTERM, then SIGKILL after a grace period.
   Stop always terminates.
 
-Output is drained on background threads. A process whose pipe buffer fills
-blocks forever, which in v2's design would have looked exactly like a healthy
-long-running tunnel.
+Output is drained on background threads.  A process whose pipe buffer fills
+blocks forever, which would look exactly like a healthy long-running tunnel.
 """
 
 from __future__ import annotations
@@ -36,14 +32,10 @@ from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
-#: Environment passed to every child, before adapter-specific additions.
-#: Deliberately minimal — a child inheriting the daemon's full environment could
-#: pick up credentials that have nothing to do with its job.
 BASE_ENV = {
     "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
     "LANG": "C",
     "LC_ALL": "C",
-    # Stops ssh and friends trying to open a GUI prompt.
     "DISPLAY": "",
 }
 
@@ -63,8 +55,6 @@ class ProcessOutcome:
     returncode: int
     stderr_tail: str
     stdout_tail: str
-    #: True when the engine asked for the stop, so callers can distinguish a
-    #: deliberate shutdown from a crash.
     requested: bool = False
 
 
@@ -76,7 +66,6 @@ class SupervisedProcess:
     env: dict[str, str] = field(default_factory=dict)
     description: str = ""
     log_lines: int = DEFAULT_LOG_LINES
-    #: Called for each output line, as (stream_name, line).
     on_output: Callable[[str, str], None] | None = None
 
     _popen: subprocess.Popen | None = field(default=None, init=False, repr=False)
@@ -87,27 +76,22 @@ class SupervisedProcess:
     _readers: list[threading.Thread] = field(default_factory=list, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
-    # ── Lifecycle ───────────────────────────────────────────────────────
-
     def start(self) -> int:
-        """Spawn the process and return its PID."""
         if self._popen is not None:
             raise RuntimeError("Process already started")
 
         self._stdout = deque(maxlen=self.log_lines)
         self._stderr = deque(maxlen=self.log_lines)
 
-        self._popen = subprocess.Popen(  # noqa: S603 - argv is built by a validated adapter
+        self._popen = subprocess.Popen(  # noqa: S603
             self.argv,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL,
             env={**BASE_ENV, **self.env},
-            # Detach into a new session so the child leads its own process group
-            # and does not receive signals aimed at the daemon's terminal.
             start_new_session=True,
-            text=True,
-            bufsize=1,
+            text=False,  # FIX L1: read bytes, decode with replace
+            bufsize=0,
             close_fds=True,
         )
 
@@ -130,12 +114,6 @@ class SupervisedProcess:
         return ProcessState.RUNNING
 
     def poll(self) -> ProcessOutcome | None:
-        """Check whether the process has exited, latching the outcome once.
-
-        Returns the outcome if it has finished, ``None`` while it is running.
-        Safe to call repeatedly: after the first observed exit the latched value
-        is returned without touching the (possibly recycled) PID again.
-        """
         with self._lock:
             if self._outcome is not None:
                 return self._outcome
@@ -150,7 +128,6 @@ class SupervisedProcess:
             return self._outcome
 
     def stop(self, *, grace_seconds: float = 10.0) -> ProcessOutcome:
-        """Terminate the process group, escalating to SIGKILL. Always terminates."""
         with self._lock:
             self._stop_requested = True
             if self._outcome is not None:
@@ -175,7 +152,7 @@ class SupervisedProcess:
             self._signal_group(signal.SIGKILL)
             try:
                 popen.wait(timeout=5)
-            except subprocess.TimeoutExpired:  # pragma: no cover - kernel-level stall
+            except subprocess.TimeoutExpired:
                 logger.error("pid=%s survived SIGKILL", popen.pid)
 
         self._join_readers()
@@ -186,8 +163,6 @@ class SupervisedProcess:
                 self._outcome = self._latch(returncode)
             return self._outcome
 
-    # ── Output ──────────────────────────────────────────────────────────
-
     def stdout_tail(self, limit: int | None = None) -> list[str]:
         lines = list(self._stdout)
         return lines[-limit:] if limit else lines
@@ -196,10 +171,7 @@ class SupervisedProcess:
         lines = list(self._stderr)
         return lines[-limit:] if limit else lines
 
-    # ── Internals ───────────────────────────────────────────────────────
-
     def _latch(self, returncode: int) -> ProcessOutcome:
-        """Build the final outcome. Caller must hold the lock."""
         self._join_readers(timeout=1.0)
         return ProcessOutcome(
             returncode=returncode,
@@ -209,12 +181,6 @@ class SupervisedProcess:
         )
 
     def _signal_group(self, sig: signal.Signals) -> None:
-        """Signal the child's whole process group.
-
-        Falls back to signalling the process directly if the group has already
-        gone, and treats "no such process" as success — the goal is that it is
-        not running, and it is not.
-        """
         popen = self._popen
         if popen is None or popen.poll() is not None:
             return
@@ -222,7 +188,7 @@ class SupervisedProcess:
             os.killpg(os.getpgid(popen.pid), sig)
         except ProcessLookupError:
             return
-        except PermissionError:  # pragma: no cover - only if the child changed uid
+        except PermissionError:
             logger.error("Not permitted to signal process group of pid=%s", popen.pid)
         except OSError:
             try:
@@ -231,13 +197,14 @@ class SupervisedProcess:
                 return
 
     def _start_reader(self, name: str, stream, sink: deque) -> None:
-        if stream is None:  # pragma: no cover - only when pipes are disabled
+        if stream is None:
             return
 
         def pump() -> None:
             try:
-                for line in stream:
-                    text = line.rstrip("\n")
+                for raw_line in stream:
+                    # FIX L1: decode with replacement instead of dying on bad bytes
+                    text = raw_line.rstrip(b"\n").decode("utf-8", errors="replace")
                     sink.append(text)
                     if self.on_output is not None:
                         try:
@@ -245,7 +212,6 @@ class SupervisedProcess:
                         except Exception:
                             logger.exception("Output callback failed for %s", name)
             except (ValueError, OSError):
-                # Pipe closed while the process was tearing down.
                 pass
             finally:
                 try:
@@ -263,12 +229,6 @@ class SupervisedProcess:
 
 
 def is_pid_alive(pid: int) -> bool:
-    """Whether a PID currently exists.
-
-    Only meaningful for a PID this process has *not* reaped — see the module
-    docstring on PID reuse. Used by the reconciler when adopting processes
-    recorded by a previous engine run.
-    """
     if pid <= 0:
         return False
     try:
@@ -276,6 +236,38 @@ def is_pid_alive(pid: int) -> bool:
     except ProcessLookupError:
         return False
     except PermissionError:
-        # Exists, owned by someone else.
         return True
     return True
+
+
+def kill_process_group(pid: int, grace_seconds: float = 10.0) -> bool:
+    """Signal a process group by PID.  Used by the CLI supervisor to kill
+    processes it didn't start (e.g. from a previous session).  Returns True
+    if the process is gone after the call."""
+    if pid <= 0 or not is_pid_alive(pid):
+        return True
+    try:
+        pgid = os.getpgid(pid)
+        os.killpg(pgid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError, OSError):
+            return not is_pid_alive(pid)
+
+    deadline = time.monotonic() + grace_seconds
+    while time.monotonic() < deadline:
+        if not is_pid_alive(pid):
+            return True
+        time.sleep(0.1)
+
+    try:
+        pgid = os.getpgid(pid)
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+    time.sleep(0.2)
+    return not is_pid_alive(pid)

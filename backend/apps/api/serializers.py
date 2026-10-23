@@ -76,7 +76,10 @@ class AgentSerializer(serializers.ModelSerializer):
             "operating_system", "architecture", "remote_username", "is_privileged",
             "reachable_cidrs", "engine_session_id", "last_seen_at", "created_at",
         ]
-        read_only_fields = ["id", "created_at", "last_seen_at", "status"]
+        read_only_fields = [
+            "id", "created_at", "last_seen_at", "status",
+            "reachable_cidrs", "engine_session_id",
+        ]
 
 
 # ── Tunnels ─────────────────────────────────────────────────────────────
@@ -109,19 +112,13 @@ class TunnelSerializer(serializers.ModelSerializer):
         Falls back to the kind name rather than raising: a spec that no longer
         parses (because the schema tightened) must not make the whole list 500.
         """
-        from apps.engine.adapters.ssh import SshAdapter
-        from apps.engine.specs import SpecError, parse_spec
+        from mudale_engine.adapters.ssh import SshAdapter
+        from mudale_engine.specs import SpecError, parse_spec
 
         try:
             spec = parse_spec(tunnel.kind, tunnel.spec)
-        except SpecError:
-            return tunnel.get_kind_display()
-
-        try:
-            adapter = SshAdapter("ssh")
-            adapter._resolved = "ssh"  # description only; never executed
-            return adapter.plan(spec).description
-        except Exception:
+            return SshAdapter.describe(spec)
+        except (SpecError, TypeError, Exception):
             return tunnel.get_kind_display()
 
 
@@ -135,6 +132,15 @@ class TunnelCreateSerializer(serializers.Serializer):
     agent = serializers.PrimaryKeyRelatedField(
         queryset=Agent.objects.all(), required=False, allow_null=True
     )
+
+    def validate(self, attrs):
+        agent = attrs.get("agent")
+        engagement = attrs.get("engagement")
+        if agent and agent.engagement_id != engagement.pk:
+            raise serializers.ValidationError(
+                {"agent": "Agent does not belong to this engagement."}
+            )
+        return attrs
 
 
 class TunnelLogSerializer(serializers.Serializer):
@@ -180,13 +186,20 @@ class ScanSerializer(serializers.ModelSerializer):
 
 class ScanCreateSerializer(serializers.Serializer):
     engagement = serializers.PrimaryKeyRelatedField(queryset=Engagement.objects.all())
-    # Intentionally a plain CharField: the real validation is the engagement's
-    # scope check in the service layer, which parses it into a network object.
     target = serializers.CharField(max_length=253)
     profile = serializers.ChoiceField(choices=Scan._meta.get_field("profile").choices)
     via_tunnel = serializers.PrimaryKeyRelatedField(
         queryset=Tunnel.objects.all(), required=False, allow_null=True
     )
+
+    def validate(self, attrs):
+        via_tunnel = attrs.get("via_tunnel")
+        engagement = attrs.get("engagement")
+        if via_tunnel and via_tunnel.engagement_id != engagement.pk:
+            raise serializers.ValidationError(
+                {"via_tunnel": "Tunnel does not belong to this engagement."}
+            )
+        return attrs
 
 
 # ── Audit ───────────────────────────────────────────────────────────────

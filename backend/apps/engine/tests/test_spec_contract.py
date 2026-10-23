@@ -24,19 +24,26 @@ from pathlib import Path
 
 import pytest
 
-from apps.engine.specs import SPEC_BY_KIND
+from mudale_engine.specs import SPEC_BY_KIND
 
 FRONTEND_FORM = (
     Path(__file__).resolve().parents[4] / "frontend" / "src" / "components" / "TunnelFormModal.tsx"
 )
 
 #: Fields the form supplies outside the per-kind map, so they are expected to be
-#: absent from it but present on the model.
-ALWAYS_SENT = {"endpoint"}
+#: absent from it but present on the model.  SSH kinds get an endpoint block;
+#: ligolo does not.
+ALWAYS_SENT_BY_KIND: dict[str, set[str]] = {
+    "ssh_local": {"endpoint"},
+    "ssh_dynamic": {"endpoint"},
+    "ssh_remote": {"endpoint"},
+    "ssh_remote_dynamic": {"endpoint"},
+    "ligolo": set(),
+}
 
 #: Fields on the models that the form is not required to send, because the
 #: schema defaults them.
-OPTIONAL_ON_MODEL = {"kind"}
+OPTIONAL_ON_MODEL = {"kind", "selfcert"}
 
 pytestmark = pytest.mark.skipif(
     not FRONTEND_FORM.is_file(), reason="frontend is not checked out"
@@ -72,7 +79,8 @@ def test_the_form_sends_exactly_the_fields_the_spec_requires(kind):
     required one is too — so any disagreement here is a 400 on every attempt to
     create that kind from the dashboard.
     """
-    model_fields = set(SPEC_BY_KIND[kind].model_fields) - ALWAYS_SENT - OPTIONAL_ON_MODEL
+    always_sent = ALWAYS_SENT_BY_KIND.get(kind, set())
+    model_fields = set(SPEC_BY_KIND[kind].model_fields) - always_sent - OPTIONAL_ON_MODEL
     form_fields = set(frontend_spec_fields()[kind])
 
     missing = model_fields - form_fields
@@ -83,12 +91,14 @@ def test_the_form_sends_exactly_the_fields_the_spec_requires(kind):
 
 
 def test_the_form_still_sends_the_ssh_endpoint():
-    """Every kind needs it, so it is built outside the per-kind map.
+    """SSH kinds need it, so it is built outside the per-kind map.
 
     Worth asserting: it was absent entirely in the version of the form that
-    shipped with the wrong field names.
+    shipped with the wrong field names.  ligolo tunnels skip the SSH
+    endpoint entirely — the form guards the block behind ``!isLigolo``.
     """
     source = FRONTEND_FORM.read_text()
-    assert "endpoint: {" in source
+    assert "endpoint" in source and "{" in source
     for field in ("user:", "host:", "port:"):
         assert field in source, f"the endpoint block no longer sets {field}"
+    assert "isLigolo" in source, "ligolo guard is missing from the endpoint block"

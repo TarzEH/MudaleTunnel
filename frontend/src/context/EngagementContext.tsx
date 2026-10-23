@@ -24,7 +24,8 @@ export function EngagementProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    if (selectedId === null && items.length > 0) {
+    if (items.length === 0) return;
+    if (selectedId === null || !items.some((e) => e.id === selectedId)) {
       setSelectedIdState(items[0]?.id ?? null);
     }
   }, [items, selectedId]);

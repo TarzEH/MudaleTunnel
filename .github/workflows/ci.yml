@@ -67,7 +67,7 @@ jobs:
         working-directory: backend
         run: |
           uv venv
-          uv pip install -e ".[dev]"
+          uv pip install -e ".[server,dev]"
 
       - name: Lint
         working-directory: backend
@@ -83,7 +83,11 @@ jobs:
         working-directory: backend
         # Includes the ssh integration test, which needs a real sshd —
         # ubuntu-latest ships one.
-        run: uv run pytest -q
+        run: uv run pytest -q --cov=apps --cov-report=term-missing
+
+      - name: Security scan
+        working-directory: backend
+        run: uv run pip-audit
 
       - name: Production settings refuse an unsafe configuration
         working-directory: backend
@@ -119,6 +123,10 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+      - name: Security scan
+        working-directory: frontend
+        run: npm audit --audit-level=high || true
 
   image:
     name: Image

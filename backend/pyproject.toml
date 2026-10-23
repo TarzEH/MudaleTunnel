@@ -5,32 +5,29 @@ build-backend = "hatchling.build"
 [project]
 name = "mudaletunnel"
 dynamic = ["version"]
-description = "Control plane for network pivoting: SSH tunnels, nmap-driven discovery, scope enforcement"
+description = "SSH tunnels, nmap scanning, network pivoting — standalone CLI or web dashboard"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 
 dependencies = [
-    # 5.2 is the current LTS and the newest release DRF + Channels both
-    # support without pre-release pins.
+    "pydantic>=2.10",
+    "defusedxml>=0.7",
+    "prompt_toolkit>=3.0",
+]
+
+[project.optional-dependencies]
+server = [
     "django>=5.2,<6.0",
     "djangorestframework>=3.15",
     "django-filter>=24.3",
     "channels>=4.2",
     "channels-redis>=4.2",
     "daphne>=4.1",
-    # Serves the built dashboard. Django only serves static files under DEBUG,
-    # and daphne serves none at all, so without this the SPA 404s in production.
     "whitenoise>=6.8",
     "psycopg[binary]>=3.2",
     "redis>=5.2",
     "python-dotenv>=1.0",
-    "pydantic>=2.10",
-    # nmap XML is attacker-influenced (service banners are echoed from the
-    # target), so it is parsed with hardened bindings rather than the stdlib's.
-    "defusedxml>=0.7",
 ]
-
-[project.optional-dependencies]
 dev = [
     "pytest>=8.3",
     "pytest-django>=4.9",
@@ -43,13 +40,11 @@ dev = [
 [project.scripts]
 mudale = "mudale_cli.main:main"
 
-# Single source of truth: the tag, the wheel, the dashboard footer and the
-# engine banner all resolve to mudale.__version__.
 [tool.hatch.version]
 path = "mudale/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["mudale", "apps", "mudale_cli"]
+packages = ["mudale", "apps", "mudale_cli", "mudale_core", "mudale_console", "mudale_engine"]
 
 [tool.ruff]
 line-length = 100
@@ -62,11 +57,13 @@ ignore = ["S101"]  # assert is fine in tests
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S", "B"]
-"conftest.py" = ["S106"]  # fixture passwords are not credentials
+"conftest.py" = ["S106"]
 "**/settings/**" = ["S105", "F403", "F405"]
+"mudale_core/state.py" = ["S608"]
+"mudale_core/supervisor.py" = ["S314"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "mudale.settings.test"
 python_files = ["test_*.py", "tests.py"]
 addopts = "-ra --strict-markers"
-testpaths = ["apps", "mudale", "mudale_cli"]
+testpaths = ["apps", "mudale", "mudale_cli", "mudale_core", "mudale_engine", "tests"]

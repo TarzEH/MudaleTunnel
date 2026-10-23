@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { useEngagementContext } from '../context/EngagementContext';
 import { useMe, useVersion } from '../api/hooks';
 import type { ConnectionState } from '../hooks/useEngagementSocket';
@@ -49,6 +50,7 @@ export function Sidebar({ connectionState }: { connectionState: ConnectionState 
   const version = useVersion();
   const { engagements, selectedId, setSelectedId, loading } = useEngagementContext();
   const { data: me } = useMe();
+  const { signOut } = useAuth();
 
   return (
     <aside className="flex h-full w-[220px] shrink-0 flex-col border-r border-border-subtle bg-surface max-md:w-14">
@@ -137,6 +139,12 @@ export function Sidebar({ connectionState }: { connectionState: ConnectionState 
             </span>
           )}
         </div>
+        <button
+          onClick={() => signOut()}
+          className="mt-2 w-full rounded-md px-2 py-1.5 text-xs text-text-muted hover:bg-surface-2 hover:text-text-primary max-md:hidden"
+        >
+          Sign out
+        </button>
       </div>
     </aside>
   );
