@@ -1,274 +1,177 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 560" font-family="'SF Mono','Cascadia Code','JetBrains Mono','Fira Code','Menlo',monospace" font-size="13">
-  <style>
-    @keyframes blink { 0%,49%{opacity:1} 50%,100%{opacity:0} }
-    .cursor { animation: blink 1s step-end infinite }
-    .green  { fill: #50fa7b }
-    .cyan   { fill: #8be9fd }
-    .yellow { fill: #f1fa8c }
-    .red    { fill: #ff5555 }
-    .purple { fill: #bd93f9 }
-    .orange { fill: #ffb86c }
-    .dim    { fill: #6272a4 }
-    .white  { fill: #f8f8f2 }
-    .bold   { font-weight: bold }
-    text    { fill: #f8f8f2 }
+<style>
+  /* ── Cursor blink ─────────────────────────────────── */
+  @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+  .cursor{animation:blink 1s step-end infinite}
 
-    /* Scene timing – each scene fades in, holds, fades out */
-    .scene { opacity: 0 }
+  /* ── Scene visibility (32 s cycle, 4×8 s) ─────────── */
+  @keyframes s1{0%,24.9%{opacity:1}25%,100%{opacity:0}}
+  @keyframes s2{0%,24.9%{opacity:0}25%,49.9%{opacity:1}50%,100%{opacity:0}}
+  @keyframes s3{0%,49.9%{opacity:0}50%,74.9%{opacity:1}75%,100%{opacity:0}}
+  @keyframes s4{0%,74.9%{opacity:0}75%,99.9%{opacity:1}100%{opacity:0}}
+  .s1{animation:s1 32s linear infinite}
+  .s2{animation:s2 32s linear infinite}
+  .s3{animation:s3 32s linear infinite}
+  .s4{animation:s4 32s linear infinite}
 
-    /* Scene 1: Banner + show modules (0s-7s) */
-    .s1 { animation: scene 28s linear infinite }
-    @keyframes scene {
-      0%    { opacity: 1 }
-      23%   { opacity: 1 }
-      25%   { opacity: 0 }
-      100%  { opacity: 0 }
-    }
+  /* ── Typing (clip-path reveal with steps = typewriter) */
+  @keyframes t1a{0%{clip-path:inset(0 100% 0 0)}6.2%{clip-path:inset(0 100% 0 0);animation-timing-function:steps(12,end)}10.3%{clip-path:inset(0 0 0 0)}100%{clip-path:inset(0 0 0 0)}}
+  @keyframes t2a{0%{clip-path:inset(0 100% 0 0)}26.5%{clip-path:inset(0 100% 0 0);animation-timing-function:steps(22,end)}30.6%{clip-path:inset(0 0 0 0)}100%{clip-path:inset(0 0 0 0)}}
+  @keyframes t2b{0%{clip-path:inset(0 100% 0 0)}32.1%{clip-path:inset(0 100% 0 0);animation-timing-function:steps(20,end)}35.3%{clip-path:inset(0 0 0 0)}100%{clip-path:inset(0 0 0 0)}}
+  @keyframes t2c{0%{clip-path:inset(0 100% 0 0)}37.4%{clip-path:inset(0 100% 0 0);animation-timing-function:steps(3,end)}38.4%{clip-path:inset(0 0 0 0)}100%{clip-path:inset(0 0 0 0)}}
+  @keyframes t3a{0%{clip-path:inset(0 100% 0 0)}51.5%{clip-path:inset(0 100% 0 0);animation-timing-function:steps(8,end)}53.8%{clip-path:inset(0 0 0 0)}100%{clip-path:inset(0 0 0 0)}}
+  @keyframes t4a{0%{clip-path:inset(0 100% 0 0)}76.5%{clip-path:inset(0 100% 0 0);animation-timing-function:steps(4,end)}77.8%{clip-path:inset(0 0 0 0)}100%{clip-path:inset(0 0 0 0)}}
+  @keyframes t4b{0%{clip-path:inset(0 100% 0 0)}80.5%{clip-path:inset(0 100% 0 0);animation-timing-function:steps(23,end)}84.4%{clip-path:inset(0 0 0 0)}100%{clip-path:inset(0 0 0 0)}}
+  @keyframes t4c{0%{clip-path:inset(0 100% 0 0)}86.8%{clip-path:inset(0 100% 0 0);animation-timing-function:steps(6,end)}88.4%{clip-path:inset(0 0 0 0)}100%{clip-path:inset(0 0 0 0)}}
+  .t1a{animation:t1a 32s linear infinite}
+  .t2a{animation:t2a 32s linear infinite}
+  .t2b{animation:t2b 32s linear infinite}
+  .t2c{animation:t2c 32s linear infinite}
+  .t3a{animation:t3a 32s linear infinite}
+  .t4a{animation:t4a 32s linear infinite}
+  .t4b{animation:t4b 32s linear infinite}
+  .t4c{animation:t4c 32s linear infinite}
 
-    /* Scene 2: use tunnel + set + run (7s-14s) */
-    .s2 { animation: scene2 28s linear infinite }
-    @keyframes scene2 {
-      0%    { opacity: 0 }
-      25%   { opacity: 0 }
-      27%   { opacity: 1 }
-      48%   { opacity: 1 }
-      50%   { opacity: 0 }
-      100%  { opacity: 0 }
-    }
+  /* ── Output blocks (fade in after typing completes) ── */
+  @keyframes o1a{0%,10.8%{opacity:0}10.9%,100%{opacity:1}}
+  @keyframes o2a{0%,31.2%{opacity:0}31.3%,100%{opacity:1}}
+  @keyframes o2b{0%,35.8%{opacity:0}35.9%,100%{opacity:1}}
+  @keyframes o2c{0%,39.0%{opacity:0}39.1%,100%{opacity:1}}
+  @keyframes o3a{0%,54.3%{opacity:0}54.4%,100%{opacity:1}}
+  @keyframes o4a{0%,78.3%{opacity:0}78.4%,100%{opacity:1}}
+  @keyframes o4b{0%,84.9%{opacity:0}85.0%,100%{opacity:1}}
+  @keyframes o4c{0%,89.0%{opacity:0}89.1%,100%{opacity:1}}
+  .o1a{animation:o1a 32s linear infinite}
+  .o2a{animation:o2a 32s linear infinite}
+  .o2b{animation:o2b 32s linear infinite}
+  .o2c{animation:o2c 32s linear infinite}
+  .o3a{animation:o3a 32s linear infinite}
+  .o4a{animation:o4a 32s linear infinite}
+  .o4b{animation:o4b 32s linear infinite}
+  .o4c{animation:o4c 32s linear infinite}
 
-    /* Scene 3: scan + services (14s-21s) */
-    .s3 { animation: scene3 28s linear infinite }
-    @keyframes scene3 {
-      0%    { opacity: 0 }
-      50%   { opacity: 0 }
-      52%   { opacity: 1 }
-      73%   { opacity: 1 }
-      75%   { opacity: 0 }
-      100%  { opacity: 0 }
-    }
+  /* ── Waiting cursor (scene 1, before typing starts) ── */
+  @keyframes wc1{0%,6.1%{opacity:1}6.2%,100%{opacity:0}}
+  .wc1{animation:wc1 32s linear infinite}
+</style>
 
-    /* Scene 4: jobs overview (21s-28s) */
-    .s4 { animation: scene4 28s linear infinite }
-    @keyframes scene4 {
-      0%    { opacity: 0 }
-      75%   { opacity: 0 }
-      77%   { opacity: 1 }
-      98%   { opacity: 1 }
-      100%  { opacity: 0 }
-    }
-  </style>
+<!-- ── Terminal chrome ──────────────────────────────────── -->
+<rect width="880" height="560" rx="12" fill="#282a36"/>
+<rect width="880" height="36" rx="12" fill="#1e1f29"/>
+<rect y="24" width="880" height="12" fill="#1e1f29"/>
+<circle cx="24" cy="18" r="6" fill="#ff5555"/>
+<circle cx="44" cy="18" r="6" fill="#f1fa8c"/>
+<circle cx="64" cy="18" r="6" fill="#50fa7b"/>
+<text x="440" y="23" text-anchor="middle" fill="#6272a4" font-size="12">mudale console</text>
 
-  <!-- Terminal window chrome -->
-  <rect width="880" height="560" rx="8" fill="#282a36"/>
-  <rect width="880" height="36" rx="8" fill="#21222c"/>
-  <rect y="28" width="880" height="8" fill="#21222c"/>
-  <circle cx="20" cy="18" r="6" fill="#ff5555"/>
-  <circle cx="40" cy="18" r="6" fill="#f1fa8c"/>
-  <circle cx="60" cy="18" r="6" fill="#50fa7b"/>
-  <text x="440" y="22" text-anchor="middle" class="dim" font-size="12">mudale console — acme-internal</text>
+<!-- ════════════════════════════════════════════════════════
+     SCENE 1 — Banner + show modules  (0 – 8 s)
+     ════════════════════════════════════════════════════════ -->
+<g class="s1">
+  <text x="440" y="62" text-anchor="middle" fill="#8be9fd" font-weight="bold">╔╦╗╦ ╦╔╦╗╔═╗╦  ╔═╗</text>
+  <text x="440" y="80" text-anchor="middle" fill="#8be9fd" font-weight="bold">║║║║ ║ ║║╠═╣║  ║╣</text>
+  <text x="440" y="98" text-anchor="middle"><tspan fill="#8be9fd" font-weight="bold">╩ ╩╚═╝═╩╝╩ ╩╩═╝╚═╝  </tspan><tspan fill="#f1fa8c">v3.1.0</tspan></text>
+  <text x="440" y="124" text-anchor="middle" fill="#6272a4">SSH tunnels · nmap scanning · network pivoting</text>
+  <text x="440" y="142" text-anchor="middle" fill="#6272a4">7 modules | 0 active | engine ready</text>
 
-  <!-- ═══ Scene 1: Banner + show modules ═══ -->
-  <g class="scene s1">
-    <!-- Banner -->
-    <text x="30" y="68" class="green bold" font-size="14">
-      ╔╦╗╦ ╦╔╦╗╔═╗╦  ╔═╗</text>
-    <text x="30" y="86" class="green bold" font-size="14">
-      ║║║║ ║ ║║╠═╣║  ║╣</text>
-    <text x="30" y="104" class="green bold" font-size="14">
-      ╩ ╩╚═╝═╩╝╩ ╩╩═╝╚═╝  <tspan class="dim">v3.1.0</tspan></text>
-    <text x="30" y="122" class="cyan" font-size="12">
-       [ SSH tunnels • nmap scanning • network pivoting ]</text>
-    <text x="30" y="146" class="dim" font-size="12">
-       7 modules | 0 active tunnels | 0 running scans | engine: ready</text>
+  <text x="30" y="178"><tspan fill="#50fa7b" font-weight="bold">mudale</tspan><tspan fill="#f8f8f2"> &gt; </tspan></text>
+  <g class="wc1"><rect x="100" y="166" width="8" height="15" fill="#f8f8f2" class="cursor"/></g>
+  <text x="100" y="178" fill="#f8f8f2" class="t1a">show modules</text>
 
-    <!-- Command: show modules -->
-    <text x="30" y="178">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> &gt; </tspan>
-      <tspan class="white">show modules</tspan>
-    </text>
-
-    <text x="30" y="206" class="bold white" font-size="13">Modules</text>
-    <text x="30" y="222" class="dim">════════════════════════════════════════════════════════════════════</text>
-
-    <text x="40" y="244" class="cyan">tunnel/ssh_local</text>
-    <text x="290" y="244" class="dim">Local port forward through an SSH jump host</text>
-
-    <text x="40" y="264" class="cyan">tunnel/ssh_dynamic</text>
-    <text x="290" y="264" class="dim">SOCKS5 proxy through an SSH jump host</text>
-
-    <text x="40" y="284" class="cyan">tunnel/ssh_remote</text>
-    <text x="290" y="284" class="dim">Reverse port forward from target to local</text>
-
-    <text x="40" y="304" class="cyan">tunnel/ssh_remote_dynamic</text>
-    <text x="290" y="304" class="dim">Reverse SOCKS5 proxy from target</text>
-
-    <text x="40" y="324" class="cyan">tunnel/ligolo</text>
-    <text x="290" y="324" class="dim">Full layer-3 pivot via ligolo-ng</text>
-
-    <text x="40" y="344" class="cyan">scan/nmap</text>
-    <text x="290" y="344" class="dim">Port scan through an active tunnel</text>
-
-    <text x="40" y="364" class="cyan">pivot/auto</text>
-    <text x="290" y="364" class="dim">Auto-discover and pivot through hosts</text>
-
-    <text x="30" y="396">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> &gt; </tspan>
-      <tspan class="cursor white">█</tspan>
-    </text>
+  <g class="o1a">
+    <text x="30" y="214" fill="#f8f8f2" font-weight="bold">Modules</text>
+    <text x="30" y="232" fill="#6272a4">════════════════════════════════════════════════════</text>
+    <text x="30" y="250"><tspan fill="#50fa7b">tunnel/ssh_local</tspan><tspan fill="#6272a4" dx="16">Local port forward (SSH -L)</tspan></text>
+    <text x="30" y="268"><tspan fill="#50fa7b">tunnel/ssh_dynamic</tspan><tspan fill="#6272a4" dx="4">SOCKS5 proxy (SSH -D)</tspan></text>
+    <text x="30" y="286"><tspan fill="#50fa7b">tunnel/ssh_remote</tspan><tspan fill="#6272a4" dx="8">Reverse port forward (SSH -R)</tspan></text>
+    <text x="30" y="304"><tspan fill="#50fa7b">tunnel/ligolo</tspan><tspan fill="#6272a4" dx="40">Layer-3 TUN pivot</tspan></text>
+    <text x="30" y="322"><tspan fill="#50fa7b">scan/nmap</tspan><tspan fill="#6272a4" dx="72">Port scan through active tunnel</tspan></text>
+    <text x="30" y="340"><tspan fill="#50fa7b">pivot/auto</tspan><tspan fill="#6272a4" dx="64">Auto-discover and pivot deeper</tspan></text>
+    <text x="30" y="376"><tspan fill="#50fa7b" font-weight="bold">mudale</tspan><tspan fill="#f8f8f2"> &gt; </tspan></text>
+    <rect x="100" y="364" width="8" height="15" fill="#f8f8f2" class="cursor"/>
   </g>
+</g>
 
-  <!-- ═══ Scene 2: use tunnel + set options + run ═══ -->
-  <g class="scene s2">
-    <text x="30" y="68">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> &gt; </tspan>
-      <tspan class="white">use tunnel/ssh_dynamic</tspan>
-    </text>
+<!-- ════════════════════════════════════════════════════════
+     SCENE 2 — Tunnel setup + run  (8 – 16 s)
+     ════════════════════════════════════════════════════════ -->
+<g class="s2">
+  <text x="30" y="62"><tspan fill="#50fa7b" font-weight="bold">mudale</tspan><tspan fill="#f8f8f2"> &gt; </tspan></text>
+  <text x="100" y="62" fill="#f8f8f2" class="t2a">use tunnel/ssh_dynamic</text>
 
-    <text x="30" y="100">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> </tspan>
-      <tspan class="purple">tunnel</tspan><tspan class="dim">(</tspan><tspan class="purple">ssh_dynamic</tspan><tspan class="dim">)</tspan>
-      <tspan class="white"> &gt; </tspan>
-      <tspan class="white">show options</tspan>
-    </text>
-
-    <text x="30" y="128" class="bold white">Module options (tunnel/ssh_dynamic):</text>
-    <text x="30" y="144" class="dim">════════════════════════════════════════════════════════════════════</text>
-    <text x="40" y="164" class="bold dim">Name            Current       Required  Description</text>
-    <text x="40" y="182" class="dim">──────────────  ────────────  ────────  ─────────────────────────</text>
-    <text x="40" y="200"><tspan class="yellow">RHOST</tspan><tspan class="white">                             yes       SSH jump host</tspan></text>
-    <text x="40" y="218"><tspan class="yellow">RPORT</tspan><tspan class="white">           22            yes       SSH port</tspan></text>
-    <text x="40" y="236"><tspan class="yellow">USERNAME</tspan><tspan class="white">                          yes       SSH user</tspan></text>
-    <text x="40" y="254"><tspan class="yellow">LPORT</tspan><tspan class="white">           1080          yes       Local SOCKS port</tspan></text>
-    <text x="40" y="272"><tspan class="yellow">IDENTITY</tspan><tspan class="white">                          no        SSH key path</tspan></text>
-
-    <text x="30" y="304">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> </tspan><tspan class="purple">tunnel</tspan><tspan class="dim">(</tspan><tspan class="purple">ssh_dynamic</tspan><tspan class="dim">)</tspan>
-      <tspan class="white"> &gt; set RHOST 10.4.10.99</tspan>
-    </text>
-    <text x="30" y="322" class="white">RHOST =&gt; 10.4.10.99</text>
-
-    <text x="30" y="350">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> </tspan><tspan class="purple">tunnel</tspan><tspan class="dim">(</tspan><tspan class="purple">ssh_dynamic</tspan><tspan class="dim">)</tspan>
-      <tspan class="white"> &gt; set USERNAME root</tspan>
-    </text>
-    <text x="30" y="368" class="white">USERNAME =&gt; root</text>
-
-    <text x="30" y="396">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> </tspan><tspan class="purple">tunnel</tspan><tspan class="dim">(</tspan><tspan class="purple">ssh_dynamic</tspan><tspan class="dim">)</tspan>
-      <tspan class="white"> &gt; run</tspan>
-    </text>
-
-    <text x="30" y="424" class="white">[<tspan class="green">*</tspan>] Starting SSH dynamic forward...</text>
-    <text x="30" y="442" class="white">[<tspan class="green">+</tspan>] <tspan class="green">Tunnel #1 active</tspan> — SOCKS5 on 127.0.0.1:1080 via root@10.4.10.99</text>
-    <text x="30" y="460" class="dim">[i] proxychains / browser SOCKS: 127.0.0.1:1080</text>
-
-    <text x="30" y="492">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> </tspan><tspan class="purple">tunnel</tspan><tspan class="dim">(</tspan><tspan class="purple">ssh_dynamic</tspan><tspan class="dim">)</tspan>
-      <tspan class="white"> &gt; </tspan>
-      <tspan class="cursor white">█</tspan>
-    </text>
+  <g class="o2a">
+    <text x="30" y="98"><tspan fill="#50fa7b" font-weight="bold">mudale</tspan><tspan fill="#bd93f9"> tunnel</tspan><tspan fill="#6272a4">(ssh_dynamic)</tspan><tspan fill="#f8f8f2"> &gt; </tspan></text>
   </g>
+  <text x="256" y="98" fill="#f8f8f2" class="t2b">set RHOST 10.4.10.99</text>
 
-  <!-- ═══ Scene 3: scan + services ═══ -->
-  <g class="scene s3">
-    <text x="30" y="68">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> &gt; use scan/nmap</tspan>
-    </text>
-
-    <text x="30" y="96">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> </tspan><tspan class="purple">scan</tspan><tspan class="dim">(</tspan><tspan class="purple">nmap</tspan><tspan class="dim">)</tspan>
-      <tspan class="white"> &gt; set TARGET 10.4.10.0/24</tspan>
-    </text>
-    <text x="30" y="114" class="white">TARGET =&gt; 10.4.10.0/24</text>
-
-    <text x="30" y="142">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> </tspan><tspan class="purple">scan</tspan><tspan class="dim">(</tspan><tspan class="purple">nmap</tspan><tspan class="dim">)</tspan>
-      <tspan class="white"> &gt; set VIA_TUNNEL 1</tspan>
-    </text>
-    <text x="30" y="160" class="white">VIA_TUNNEL =&gt; 1</text>
-
-    <text x="30" y="188">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> </tspan><tspan class="purple">scan</tspan><tspan class="dim">(</tspan><tspan class="purple">nmap</tspan><tspan class="dim">)</tspan>
-      <tspan class="white"> &gt; run</tspan>
-    </text>
-    <text x="30" y="214" class="white">[<tspan class="cyan">*</tspan>] Scanning 10.4.10.0/24 (quick) through tunnel #1...</text>
-    <text x="30" y="232" class="white">[<tspan class="green">+</tspan>] <tspan class="green">Scan complete</tspan> — 5 hosts up, 12 services found</text>
-
-    <text x="30" y="262">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> &gt; services</tspan>
-    </text>
-
-    <text x="30" y="290" class="bold white">Discovered Services</text>
-    <text x="30" y="306" class="dim">════════════════════════════════════════════════════════════════════════════════</text>
-    <text x="40" y="324" class="bold dim">Host           Port   Proto  State   Service        Version</text>
-    <text x="40" y="340" class="dim">─────────────  ─────  ─────  ──────  ─────────────  ──────────────────────</text>
-    <text x="40" y="358"><tspan class="white">10.4.10.1      </tspan><tspan class="cyan">22</tspan><tspan class="white">     tcp    open    ssh            OpenSSH 8.9p1</tspan></text>
-    <text x="40" y="376"><tspan class="white">10.4.10.1      </tspan><tspan class="cyan">80</tspan><tspan class="white">     tcp    open    http           nginx 1.24.0</tspan></text>
-    <text x="40" y="394"><tspan class="white">10.4.10.10     </tspan><tspan class="cyan">445</tspan><tspan class="white">    tcp    open    smb            Samba 4.18</tspan></text>
-    <text x="40" y="412"><tspan class="white">10.4.10.10     </tspan><tspan class="cyan">3389</tspan><tspan class="white">   tcp    open    rdp            Microsoft RDP</tspan></text>
-    <text x="40" y="430"><tspan class="white">10.4.10.50     </tspan><tspan class="cyan">1433</tspan><tspan class="white">   tcp    open    ms-sql-s       SQL Server 2019</tspan></text>
-    <text x="40" y="448"><tspan class="white">10.4.10.50     </tspan><tspan class="cyan">3306</tspan><tspan class="white">   tcp    open    mysql          MySQL 8.0.36</tspan></text>
-    <text x="30" y="466" class="dim">  ... 6 more services</text>
-
-    <text x="30" y="496">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> &gt; </tspan>
-      <tspan class="cursor white">█</tspan>
-    </text>
+  <g class="o2b">
+    <text x="30" y="116" fill="#f8f8f2">RHOST =&gt; 10.4.10.99</text>
+    <text x="30" y="152"><tspan fill="#50fa7b" font-weight="bold">mudale</tspan><tspan fill="#bd93f9"> tunnel</tspan><tspan fill="#6272a4">(ssh_dynamic)</tspan><tspan fill="#f8f8f2"> &gt; </tspan></text>
   </g>
+  <text x="256" y="152" fill="#f8f8f2" class="t2c">run</text>
 
-  <!-- ═══ Scene 4: jobs + quick forward ═══ -->
-  <g class="scene s4">
-    <text x="30" y="68">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> &gt; jobs</tspan>
-    </text>
-
-    <text x="30" y="96" class="bold white">Active Jobs</text>
-    <text x="30" y="112" class="dim">════════════════════════════════════════════════════════════════════════════════</text>
-    <text x="40" y="132" class="bold dim">ID   Type      Kind           Status   Description</text>
-    <text x="40" y="148" class="dim">───  ────────  ─────────────  ───────  ──────────────────────────────────────</text>
-    <text x="40" y="166"><tspan class="yellow"> 1</tspan><tspan class="white">   tunnel    ssh_dynamic    </tspan><tspan class="green">active</tspan><tspan class="white">   SOCKS5 127.0.0.1:1080 via root@10.4.10.99</tspan></text>
-    <text x="40" y="184"><tspan class="yellow"> 2</tspan><tspan class="white">   scan      nmap           </tspan><tspan class="green">done</tspan><tspan class="white">     10.4.10.0/24 quick — 5 hosts, 12 services</tspan></text>
-
-    <text x="30" y="220">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> &gt; forward 10.4.10.50 1433</tspan>
-    </text>
-    <text x="30" y="246" class="white">[<tspan class="green">*</tspan>] Creating local forward: 127.0.0.1:1433 → 10.4.10.50:1433</text>
-    <text x="30" y="264" class="white">[<tspan class="green">+</tspan>] <tspan class="green">Tunnel #3 active</tspan> — SQL Server accessible at localhost:1433</text>
-
-    <text x="30" y="296">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> &gt; status</tspan>
-    </text>
-
-    <text x="30" y="324" class="bold white">Engine Status</text>
-    <text x="30" y="340" class="dim">════════════════════════════════════════════════════════════</text>
-    <text x="40" y="360"><tspan class="dim">Engine:</tspan><tspan class="white">    standalone v3.1.0</tspan></text>
-    <text x="40" y="378"><tspan class="dim">SSH:</tspan><tspan class="white">       </tspan><tspan class="green">available</tspan><tspan class="white"> (OpenSSH_9.7)</tspan></text>
-    <text x="40" y="396"><tspan class="dim">Nmap:</tspan><tspan class="white">      </tspan><tspan class="green">available</tspan><tspan class="white"> (7.95)</tspan></text>
-    <text x="40" y="414"><tspan class="dim">Tunnels:</tspan><tspan class="white">   2 active / 0 failed</tspan></text>
-    <text x="40" y="432"><tspan class="dim">Scans:</tspan><tspan class="white">     1 completed (12 services found)</tspan></text>
-    <text x="40" y="450"><tspan class="dim">Workspace:</tspan><tspan class="white"> default</tspan></text>
-
-    <text x="30" y="486">
-      <tspan class="green bold">mudale</tspan>
-      <tspan class="white"> &gt; </tspan>
-      <tspan class="cursor white">█</tspan>
-    </text>
+  <g class="o2c">
+    <text x="30" y="188" fill="#f1fa8c">[*] Connecting to root@10.4.10.99:22...</text>
+    <text x="30" y="206" fill="#50fa7b">[+] Tunnel #1 active — SOCKS5 on 127.0.0.1:1080</text>
+    <text x="30" y="224" fill="#8be9fd">[i] proxychains / browser SOCKS → 127.0.0.1:1080</text>
+    <text x="30" y="260"><tspan fill="#50fa7b" font-weight="bold">mudale</tspan><tspan fill="#bd93f9"> tunnel</tspan><tspan fill="#6272a4">(ssh_dynamic)</tspan><tspan fill="#f8f8f2"> &gt; </tspan></text>
+    <rect x="256" y="248" width="8" height="15" fill="#f8f8f2" class="cursor"/>
   </g>
+</g>
+
+<!-- ════════════════════════════════════════════════════════
+     SCENE 3 — Services table  (16 – 24 s)
+     ════════════════════════════════════════════════════════ -->
+<g class="s3">
+  <text x="30" y="62"><tspan fill="#50fa7b" font-weight="bold">mudale</tspan><tspan fill="#f8f8f2"> &gt; </tspan></text>
+  <text x="100" y="62" fill="#f8f8f2" class="t3a">services</text>
+
+  <g class="o3a">
+    <text x="30" y="98" fill="#f8f8f2" font-weight="bold">Discovered Services (scan #1)</text>
+    <text x="30" y="116" fill="#6272a4">════════════════════════════════════════════════════</text>
+    <text y="134"><tspan x="30" fill="#6272a4">Host</tspan><tspan x="175" fill="#6272a4">Port</tspan><tspan x="230" fill="#6272a4">Proto</tspan><tspan x="300" fill="#6272a4">Service</tspan><tspan x="420" fill="#6272a4">Version</tspan></text>
+    <text y="152"><tspan x="30" fill="#f8f8f2">10.4.10.1</tspan><tspan x="175" fill="#f8f8f2">22</tspan><tspan x="230" fill="#f8f8f2">tcp</tspan><tspan x="300" fill="#50fa7b">ssh</tspan><tspan x="420" fill="#6272a4">OpenSSH 8.9</tspan></text>
+    <text y="170"><tspan x="30" fill="#f8f8f2">10.4.10.1</tspan><tspan x="175" fill="#f8f8f2">80</tspan><tspan x="230" fill="#f8f8f2">tcp</tspan><tspan x="300" fill="#50fa7b">http</tspan><tspan x="420" fill="#6272a4">nginx 1.24</tspan></text>
+    <text y="188"><tspan x="30" fill="#f8f8f2">10.4.10.10</tspan><tspan x="175" fill="#f8f8f2">445</tspan><tspan x="230" fill="#f8f8f2">tcp</tspan><tspan x="300" fill="#ff5555">smb</tspan><tspan x="420" fill="#6272a4">Samba 4.18</tspan></text>
+    <text y="206"><tspan x="30" fill="#f8f8f2">10.4.10.50</tspan><tspan x="175" fill="#ffb86c">1433</tspan><tspan x="230" fill="#f8f8f2">tcp</tspan><tspan x="300" fill="#ff5555">ms-sql</tspan><tspan x="420" fill="#6272a4">SQL Server 2019</tspan></text>
+    <text y="224"><tspan x="30" fill="#f8f8f2">10.4.10.50</tspan><tspan x="175" fill="#ffb86c">3306</tspan><tspan x="230" fill="#f8f8f2">tcp</tspan><tspan x="300" fill="#ff5555">mysql</tspan><tspan x="420" fill="#6272a4">MySQL 8.0</tspan></text>
+    <text y="242"><tspan x="30" fill="#f8f8f2">10.4.10.80</tspan><tspan x="175" fill="#f8f8f2">22</tspan><tspan x="230" fill="#f8f8f2">tcp</tspan><tspan x="300" fill="#50fa7b">ssh</tspan><tspan x="420" fill="#6272a4">OpenSSH 9.1</tspan></text>
+    <text y="260"><tspan x="30" fill="#f8f8f2">10.4.10.80</tspan><tspan x="175" fill="#ffb86c">8080</tspan><tspan x="230" fill="#f8f8f2">tcp</tspan><tspan x="300" fill="#50fa7b">http</tspan><tspan x="420" fill="#6272a4">Apache 2.4</tspan></text>
+    <text y="278"><tspan x="30" fill="#f8f8f2">10.4.10.80</tspan><tspan x="175" fill="#f8f8f2">5432</tspan><tspan x="230" fill="#f8f8f2">tcp</tspan><tspan x="300" fill="#50fa7b">postgresql</tspan><tspan x="420" fill="#6272a4">PostgreSQL 16.1</tspan></text>
+    <text x="30" y="314"><tspan fill="#50fa7b" font-weight="bold">mudale</tspan><tspan fill="#f8f8f2"> &gt; </tspan></text>
+    <rect x="100" y="302" width="8" height="15" fill="#f8f8f2" class="cursor"/>
+  </g>
+</g>
+
+<!-- ════════════════════════════════════════════════════════
+     SCENE 4 — Jobs + forward + status  (24 – 32 s)
+     ════════════════════════════════════════════════════════ -->
+<g class="s4">
+  <text x="30" y="62"><tspan fill="#50fa7b" font-weight="bold">mudale</tspan><tspan fill="#f8f8f2"> &gt; </tspan></text>
+  <text x="100" y="62" fill="#f8f8f2" class="t4a">jobs</text>
+
+  <g class="o4a">
+    <text x="30" y="98" fill="#f8f8f2" font-weight="bold">Active Jobs</text>
+    <text x="30" y="116" fill="#6272a4">════════════════════════════════════════════════════</text>
+    <text y="134"><tspan x="30" fill="#6272a4">ID</tspan><tspan x="60" fill="#6272a4">Type</tspan><tspan x="130" fill="#6272a4">Kind</tspan><tspan x="260" fill="#6272a4">Status</tspan><tspan x="340" fill="#6272a4">Endpoint</tspan></text>
+    <text y="152"><tspan x="30" fill="#f8f8f2">1</tspan><tspan x="60" fill="#f8f8f2">tunnel</tspan><tspan x="130" fill="#f8f8f2">ssh_dynamic</tspan><tspan x="260" fill="#50fa7b">active</tspan><tspan x="340" fill="#f8f8f2">SOCKS5 127.0.0.1:1080</tspan></text>
+    <text x="30" y="188"><tspan fill="#50fa7b" font-weight="bold">mudale</tspan><tspan fill="#f8f8f2"> &gt; </tspan></text>
+  </g>
+  <text x="100" y="188" fill="#f8f8f2" class="t4b">forward 10.4.10.50 1433</text>
+
+  <g class="o4b">
+    <text x="30" y="224" fill="#f1fa8c">[*] Local forward: 127.0.0.1:1433 → 10.4.10.50:1433</text>
+    <text x="30" y="242" fill="#50fa7b">[+] Tunnel #2 active — SQL Server at localhost:1433</text>
+    <text x="30" y="278"><tspan fill="#50fa7b" font-weight="bold">mudale</tspan><tspan fill="#f8f8f2"> &gt; </tspan></text>
+  </g>
+  <text x="100" y="278" fill="#f8f8f2" class="t4c">status</text>
+
+  <g class="o4c">
+    <text x="30" y="314" fill="#f8f8f2">Engine: standalone <tspan fill="#f1fa8c">v3.1.0</tspan></text>
+    <text x="30" y="332"><tspan fill="#f8f8f2">Tunnels: </tspan><tspan fill="#50fa7b">2 active</tspan><tspan fill="#f8f8f2">   Scans: </tspan><tspan fill="#8be9fd">1 done</tspan><tspan fill="#6272a4"> (12 services)</tspan></text>
+    <text x="30" y="368"><tspan fill="#50fa7b" font-weight="bold">mudale</tspan><tspan fill="#f8f8f2"> &gt; </tspan></text>
+    <rect x="100" y="356" width="8" height="15" fill="#f8f8f2" class="cursor"/>
+  </g>
+</g>
+
 </svg>
