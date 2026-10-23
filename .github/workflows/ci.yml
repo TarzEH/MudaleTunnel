@@ -220,6 +220,9 @@ jobs:
           sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+<\/tspan>/v${VERSION}<\/tspan>/" docs/demo.svg
           sed -i "s/standalone v[0-9]\+\.[0-9]\+\.[0-9]\+/standalone v${VERSION}/" docs/demo.svg
 
+          # Update banner SVG version badge
+          sed -i "s/>v[0-9]\+\.[0-9]\+\.[0-9]\+<\/text>/>v${VERSION}<\/text>/" docs/mudaletunnel-banner.svg
+
           # Update README banner art
           sed -i "s/╚═╝  v[0-9]\+\.[0-9]\+\.[0-9]\+/╚═╝  v${VERSION}/" README.md
 

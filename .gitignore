@@ -44,7 +44,6 @@ npm-debug.log*
 # ── Tooling scratch ─────────────────────────────────────────────────────
 .playwright-mcp/
 /docs/demo.mp4
-/docs/walkthrough-metasploitable.md
 
 # ── Lock files (uv) ────────────────────────────────────────────────────
 /backend/uv.lock
