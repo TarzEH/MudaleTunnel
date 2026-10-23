@@ -11,9 +11,9 @@ FROM node:22-alpine AS frontend
 
 WORKDIR /build
 
-# Copy manifests first so `npm ci` is cached until dependencies actually change.
+# Copy manifests first so the install step is cached until dependencies change.
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci --no-audit --no-fund
+RUN npm install --no-audit --no-fund
 
 COPY frontend/ ./
 RUN npm run build
@@ -34,7 +34,7 @@ COPY backend/pyproject.toml ./
 # Resolve into a self-contained venv that the runtime stage copies wholesale,
 # so no build tooling ends up in the final image.
 RUN uv venv /opt/venv \
- && uv pip install --python /opt/venv/bin/python -r pyproject.toml
+ && uv pip install --python /opt/venv/bin/python -r pyproject.toml --extra server
 
 
 # ── Stage 3: runtime ────────────────────────────────────────────────────

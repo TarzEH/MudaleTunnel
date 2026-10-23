@@ -142,6 +142,14 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "30/minute",
+        "user": "120/minute",
+    },
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.OrderingFilter",
@@ -225,6 +233,7 @@ ENGINE = {
     # a missing binary disables that adapter rather than crashing the daemon.
     "SSH_BIN": env_str("MUDALE_SSH_BIN", default="ssh"),
     "NMAP_BIN": env_str("MUDALE_NMAP_BIN", default="nmap"),
+    "LIGOLO_BIN": env_str("MUDALE_LIGOLO_BIN", default="ligolo-proxy"),
     # How often the supervisor reconciles desired state against reality.
     "RECONCILE_INTERVAL_SECONDS": env_int("MUDALE_ENGINE_RECONCILE_INTERVAL", default=5),
     # How long to wait for a process to die on SIGTERM before SIGKILL.

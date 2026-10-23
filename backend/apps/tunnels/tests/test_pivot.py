@@ -251,7 +251,6 @@ def test_proxychains_config_points_at_the_socks_port(socks):
     config = pivot.proxychains_config(socks)
     assert "socks5 127.0.0.1 1080" in config
     assert "strict_chain" in config
-    # The guidance matters as much as the config: a SYN scan cannot work here.
     assert "-sT" in config
 
 
@@ -261,3 +260,84 @@ def test_proxychains_is_refused_for_a_non_socks_tunnel(engagement, agent):
     )
     with pytest.raises(pivot.PivotError, match="not a SOCKS proxy"):
         pivot.proxychains_config(forward)
+
+
+# ── ligolo pivot ───────────────────────────────────────────────────────
+
+LIGOLO_SPEC = {
+    "agent_addr": "10.4.0.20",
+    "listen_port": 11601,
+    "tun_name": "ligolo",
+    "laddr": "0.0.0.0",
+    "selfcert": True,
+}
+
+
+@pytest.fixture
+def ligolo_tunnel(engagement, agent):
+    return Tunnel.objects.create(
+        engagement=engagement,
+        agent=agent,
+        kind=TunnelKind.LIGOLO,
+        label="ligolo pivot",
+        spec=LIGOLO_SPEC,
+        status=TunnelStatus.ACTIVE,
+    )
+
+
+def test_ligolo_services_are_already_reachable(engagement, ligolo_tunnel, operator):
+    """A ligolo TUN routes natively — expose_service tells you no forward is needed."""
+    scan = add_findings(
+        engagement, via=ligolo_tunnel,
+        findings=[("10.4.9.5", 1433, "ms-sql-s")],
+    )
+    service = Service.objects.get(scan=scan)
+    with pytest.raises(pivot.PivotError, match="already reachable"):
+        pivot.expose_service(service, operator=operator)
+
+
+def test_auto_expose_refuses_ligolo_tunnel(engagement, ligolo_tunnel, operator):
+    """Auto-expose has nothing to do for ligolo — everything is already routable."""
+    add_findings(
+        engagement, via=ligolo_tunnel,
+        findings=[("10.4.9.5", 1433, "ms-sql-s")],
+    )
+    with pytest.raises(pivot.PivotError, match="already routable"):
+        pivot.auto_expose(engagement, tunnel=ligolo_tunnel, operator=operator)
+
+
+def test_ligolo_routing_advice_lists_discovered_subnets(engagement, ligolo_tunnel):
+    add_findings(
+        engagement, via=ligolo_tunnel,
+        findings=[("10.4.9.5", 1433, "ms-sql-s"), ("10.4.50.9", 80, "http")],
+    )
+    advice = pivot.ligolo_routing_advice(ligolo_tunnel)
+    assert "ip route add 10.4.9.0/24 dev ligolo" in advice
+    assert "ip route add 10.4.50.0/24 dev ligolo" in advice
+
+
+def test_ligolo_routing_advice_with_explicit_subnets(ligolo_tunnel):
+    advice = pivot.ligolo_routing_advice(ligolo_tunnel, subnets=["172.16.0.0/24"])
+    assert "ip route add 172.16.0.0/24 dev ligolo" in advice
+
+
+def test_ligolo_routing_advice_shows_placeholder_when_no_subnets(ligolo_tunnel):
+    advice = pivot.ligolo_routing_advice(ligolo_tunnel)
+    assert "No subnets discovered yet" in advice
+
+
+def test_ligolo_routing_advice_refused_for_socks(socks):
+    with pytest.raises(pivot.PivotError, match="not a ligolo tunnel"):
+        pivot.ligolo_routing_advice(socks)
+
+
+def test_build_map_works_with_ligolo_pivots(engagement, ligolo_tunnel):
+    """build_map is tunnel-agnostic — it works with any tunnel type."""
+    add_findings(
+        engagement, via=ligolo_tunnel,
+        findings=[("10.4.9.5", 1433, "ms-sql-s"), ("10.4.9.6", 80, "http")],
+    )
+    result = pivot.build_map(engagement)
+    behind = result.by_tunnel[ligolo_tunnel.pk]
+    assert len(behind) == 2
+    assert result.subnets_by_tunnel[ligolo_tunnel.pk] == ["10.4.9.0/24"]

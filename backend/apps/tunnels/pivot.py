@@ -1,26 +1,22 @@
 """Pivoting, driven by what nmap actually found.
 
-ligolo-ng's approach is to build a TUN interface and route whole subnets into
-it, so every tool works unmodified. That needs a custom agent, a userland TCP/IP
-stack, and root on the operator's machine.
+Two pivot modes, chosen by the tunnel type the scan ran through:
 
-This takes the same goal — reach things behind a foothold without hand-rolling a
-forward for each one — and gets there from the other end. Instead of routing a
-subnet you *hope* is there, you scan through the pivot, and then act on what is
-provably reachable:
+**SSH SOCKS** (``ssh -D``) — TCP-only, needs proxychains or a SOCKS-aware tool.
+After scanning, discovered services are *exposed* as local forwards (``ssh -L``)
+so plain tools get a localhost port. No agent on the target, no root needed.
 
-1. **Reach** — a SOCKS proxy through the foothold (``ssh -D``).
-2. **Discover** — run nmap *through* that proxy. Every open port it finds is a
-   host the pivot can genuinely reach, recorded with the tunnel it was seen
-   through.
-3. **Expose** — turn any discovered service into a direct local forward
-   (``ssh -L``), so tools that cannot speak SOCKS get a plain localhost port.
-4. **Chain** — a newly reachable host can itself become the next foothold.
+**ligolo-ng TUN** — full IP-layer (TCP/UDP/ICMP) through a TUN interface, so
+every tool works unmodified at the service's real address. After scanning,
+discovered services are already reachable — no additional forward is needed.
 
-The trade-off against a TUN interface is honest: SOCKS is TCP-only and needs
-either a SOCKS-aware tool or proxychains. What you get in exchange is that no
-custom agent has to be dropped on the target, nothing needs root, and the map is
-evidence rather than assumption.
+Both modes share the same scan-driven workflow:
+
+1. **Reach** — establish a pivot (SOCKS proxy or ligolo TUN).
+2. **Discover** — scan *through* the pivot. Every open port is evidence of
+   reachability, recorded with the tunnel it was seen through.
+3. **Expose** — SSH SOCKS: create local forwards. ligolo: already routable.
+4. **Chain** — a newly reachable host can become the next foothold.
 """
 
 from __future__ import annotations
@@ -225,6 +221,13 @@ def expose_service(
             f"reachable without a tunnel."
         )
 
+    if pivot.kind == TunnelKind.LIGOLO:
+        raise PivotError(
+            f"{service.host}:{service.port} is already reachable through the "
+            f"ligolo TUN interface (tunnel #{pivot.pk}). No forward needed — "
+            f"connect directly to the target address."
+        )
+
     if pivot.kind != TunnelKind.SSH_DYNAMIC:
         raise PivotError(
             f"Tunnel {pivot.pk} is a {pivot.get_kind_display()}, not a SOCKS proxy. "
@@ -269,7 +272,16 @@ def auto_expose(
     asked for, and the number of forwards is capped, because "open a hundred
     ports into a client network" should never be the accidental outcome of one
     command.
+
+    For ligolo tunnels, services are already reachable through the TUN
+    interface — no forwards are created.
     """
+    if tunnel.kind == TunnelKind.LIGOLO:
+        raise PivotError(
+            f"Tunnel #{tunnel.pk} is a ligolo TUN interface — all discovered "
+            f"services are already routable. Use `ligolo_routing_advice()` for "
+            f"ip-route commands."
+        )
     queryset = Service.objects.filter(
         engagement=engagement, scan__via_tunnel=tunnel, state=Service.State.OPEN
     ).order_by("host", "port")
@@ -354,3 +366,45 @@ def proxychains_config(tunnel: Tunnel) -> str:
             "",
         ]
     )
+
+
+def ligolo_routing_advice(tunnel: Tunnel, subnets: list[str] | None = None) -> str:
+    """Routing commands for a ligolo TUN pivot.
+
+    Unlike SOCKS, ligolo routes IP traffic natively through a TUN interface.
+    Tools work unmodified — no proxychains needed — but the operator must add
+    routes for the discovered subnets.
+    """
+    if tunnel.kind != TunnelKind.LIGOLO:
+        raise PivotError(
+            f"Tunnel {tunnel.pk} is a {tunnel.get_kind_display()}, not a ligolo tunnel."
+        )
+
+    tun_name = tunnel.spec.get("tun_name", "ligolo")
+
+    if subnets is None:
+        services = Service.objects.filter(
+            scan__via_tunnel=tunnel, state=Service.State.OPEN,
+        ).values_list("host", flat=True).distinct()
+        subnets = summarise_subnets(services)
+
+    safe_label = str(tunnel).replace("\n", " ").replace("\r", " ")
+    lines = [
+        f"# Routing for MudaleTunnel ligolo pivot #{tunnel.pk} ({safe_label})",
+        "#",
+        "# ligolo-ng routes traffic through a TUN interface. Add these routes",
+        "# so your tools reach the discovered subnets natively — no proxychains.",
+        "#",
+        f"# Interface: {tun_name}",
+        "",
+    ]
+
+    if subnets:
+        for subnet in subnets:
+            lines.append(f"sudo ip route add {subnet} dev {tun_name}")
+    else:
+        lines.append("# No subnets discovered yet. After scanning, add routes like:")
+        lines.append(f"#   sudo ip route add 10.4.9.0/24 dev {tun_name}")
+
+    lines.append("")
+    return "\n".join(lines)
