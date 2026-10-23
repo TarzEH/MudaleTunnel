@@ -263,7 +263,7 @@ mudale console
 ```
   ╔╦╗╦ ╦╔╦╗╔═╗╦  ╔═╗
   ║║║║ ║ ║║╠═╣║  ║╣
-  ╩ ╩╚═╝═╩╝╩ ╩╩═╝╚═╝  v3.0.0
+  ╩ ╩╚═╝═╩╝╩ ╩╩═╝╚═╝  v3.1.0
    [ SSH tunnels • nmap scanning • network pivoting ]
    7 modules | 0 active tunnels | 0 running scans | engine: ready
 
@@ -549,7 +549,7 @@ mudale console    # or just: mudale
 ```
   ╔╦╗╦ ╦╔╦╗╔═╗╦  ╔═╗
   ║║║║ ║ ║║╠═╣║  ║╣
-  ╩ ╩╚═╝═╩╝╩ ╩╩═╝╚═╝  v3.0.0
+  ╩ ╩╚═╝═╩╝╩ ╩╩═╝╚═╝  v3.1.0
    [ SSH tunnels • nmap scanning • network pivoting ]
    7 modules | 0 active tunnels | 0 running scans | engine: ready
 
