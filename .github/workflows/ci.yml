@@ -220,6 +220,9 @@ jobs:
           sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+<\/tspan>/v${VERSION}<\/tspan>/" docs/demo.svg
           sed -i "s/standalone v[0-9]\+\.[0-9]\+\.[0-9]\+/standalone v${VERSION}/" docs/demo.svg
 
+          # Update README banner art
+          sed -i "s/╚═╝  v[0-9]\+\.[0-9]\+\.[0-9]\+/╚═╝  v${VERSION}/" README.md
+
           # Check if anything changed
           if git diff --quiet; then
             echo "No version changes needed"
