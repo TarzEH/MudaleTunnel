@@ -67,6 +67,14 @@ class AppendOnlyError(Exception):
     """Raised on any attempt to modify or delete an existing audit event."""
 
 
+class AuditQuerySet(models.QuerySet):
+    def delete(self):
+        raise AppendOnlyError("Audit events are append-only and cannot be bulk-deleted")
+
+    def update(self, **kwargs):
+        raise AppendOnlyError("Audit events are append-only and cannot be bulk-updated")
+
+
 class AuditEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
@@ -102,6 +110,8 @@ class AuditEvent(models.Model):
 
     request_id = models.CharField(max_length=36, blank=True, db_index=True)
     source_ip = models.GenericIPAddressField(null=True, blank=True)
+
+    objects = AuditQuerySet.as_manager()
 
     class Meta:
         ordering = ["-created_at", "-id"]

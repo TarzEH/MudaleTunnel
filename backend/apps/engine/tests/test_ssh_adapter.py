@@ -1,15 +1,15 @@
 """Tests for the SSH adapter's argv construction.
 
 The first two tests are regression tests for the v2 defects described in
-``apps.engine.adapters.ssh``. They are the reason the tunnel PID can be trusted.
+``mudale_engine.adapters.ssh``. They are the reason the tunnel PID can be trusted.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from apps.engine.adapters.ssh import SshAdapter
-from apps.engine.specs import (
+from mudale_engine.adapters.ssh import SshAdapter
+from mudale_engine.specs import (
     SshDynamicForwardSpec,
     SshEndpoint,
     SshLocalForwardSpec,
@@ -127,7 +127,9 @@ def test_local_forward_argv(adapter):
     assert argv[0] == "/usr/bin/ssh"
     assert "-L" in argv
     assert argv[argv.index("-L") + 1] == "127.0.0.1:8080:10.4.9.5:443"
-    assert argv[-1] == "opsec@10.4.0.10"
+    assert argv[-1] == "10.4.0.10"
+    assert argv[-3] == "-l"
+    assert argv[-2] == "opsec"
     assert argv[argv.index("-p") + 1] == "2222"
 
 
@@ -166,7 +168,10 @@ def test_destination_is_the_final_argument(adapter):
     spec = SshLocalForwardSpec(
         endpoint=ENDPOINT, local_port=8080, target_host="10.4.9.5", target_port=443
     )
-    assert argv_for(adapter, spec)[-1] == "opsec@10.4.0.10"
+    argv = argv_for(adapter, spec)
+    assert argv[-1] == "10.4.0.10"
+    assert argv[-3] == "-l"
+    assert argv[-2] == "opsec"
 
 
 # ── Exit interpretation ─────────────────────────────────────────────────

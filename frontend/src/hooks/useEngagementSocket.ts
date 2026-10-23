@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { wsUrl } from '../api/client';
+import { getStoredApiKey, wsUrl } from '../api/client';
 import type { WsMessage } from '../api/types';
 
 export type ConnectionState = 'connecting' | 'open' | 'closed';
@@ -34,7 +34,12 @@ export function useEngagementSocket(
 
     function connect() {
       setState('connecting');
-      socket = new WebSocket(wsUrl(`/ws/v1/engagements/${engagementId}/`));
+      let url = wsUrl(`/ws/v1/engagements/${engagementId}/`);
+      const apiKey = getStoredApiKey();
+      if (apiKey) {
+        url += `?token=${encodeURIComponent(apiKey)}`;
+      }
+      socket = new WebSocket(url);
 
       socket.onopen = () => {
         backoff = MIN_BACKOFF_MS;

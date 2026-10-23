@@ -25,8 +25,8 @@ from apps.audit.models import AuditAction
 from apps.audit.services import record, record_denial
 from apps.engagements.models import Engagement
 from apps.engagements.scope import ScopeViolation
-from apps.engine.specs import SpecError, parse_spec
 from apps.tunnels.models import DesiredState, Tunnel, TunnelKind, TunnelStatus
+from mudale_engine.specs import SpecError, parse_spec
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +48,20 @@ SCOPED_HOST_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 
-def _require_mutation(operator) -> None:
-    if operator is not None and not operator.can_mutate:
+def _require_mutation(operator, engagement: Engagement | None = None) -> None:
+    if operator is None:
+        return
+    if not operator.can_mutate:
         raise PermissionDenied("Your role is read-only")
+    if engagement is not None:
+        from apps.engagements.models import EngagementMembership
+        membership = EngagementMembership.objects.filter(
+            engagement=engagement, operator=operator
+        ).first()
+        if membership is not None and not membership.can_mutate:
+            raise PermissionDenied(
+                f"Your engagement role ({membership.get_role_display()}) is read-only"
+            )
 
 
 def _resolve(spec, dotted: str):
@@ -89,7 +100,7 @@ def create_tunnel(
     for a read-only role. Denials are audited before the exception propagates —
     a blocked attempt is exactly what a post-incident review needs to see.
     """
-    _require_mutation(operator)
+    _require_mutation(operator, engagement)
 
     try:
         parsed = parse_spec(kind, spec)
@@ -141,7 +152,7 @@ def request_stop(tunnel: Tunnel, *, operator=None) -> Tunnel:
     Returns immediately: the daemon owns the process and performs the actual
     stop. The status only becomes STOPPED once the daemon has confirmed it.
     """
-    _require_mutation(operator)
+    _require_mutation(operator, tunnel.engagement)
 
     tunnel.desired_state = DesiredState.DOWN
     tunnel.save(update_fields=["desired_state", "updated_at"])
@@ -157,7 +168,7 @@ def request_stop(tunnel: Tunnel, *, operator=None) -> Tunnel:
 
 def request_start(tunnel: Tunnel, *, operator=None) -> Tunnel:
     """Bring a stopped tunnel back up, reusing its existing spec."""
-    _require_mutation(operator)
+    _require_mutation(operator, tunnel.engagement)
 
     # Re-check scope: the engagement may have been narrowed, paused or expired
     # since the tunnel was first created.

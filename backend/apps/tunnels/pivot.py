@@ -307,13 +307,13 @@ def auto_expose(
 
 def _already_exposed(engagement: Engagement, service: Service) -> bool:
     """Whether a live forward to this host and port already exists."""
-    for tunnel in Tunnel.objects.filter(
-        engagement=engagement, kind=TunnelKind.SSH_LOCAL, desired_state=DesiredState.UP
-    ):
-        spec = tunnel.spec
-        if spec.get("target_host") == service.host and spec.get("target_port") == service.port:
-            return True
-    return False
+    return Tunnel.objects.filter(
+        engagement=engagement,
+        kind=TunnelKind.SSH_LOCAL,
+        desired_state=DesiredState.UP,
+        spec__target_host=service.host,
+        spec__target_port=service.port,
+    ).exists()
 
 
 # ── Client configuration ────────────────────────────────────────────────
@@ -333,9 +333,10 @@ def proxychains_config(tunnel: Tunnel) -> str:
     bind = tunnel.spec.get("local_bind", "127.0.0.1")
     port = tunnel.spec.get("local_port")
 
+    safe_label = str(tunnel).replace("\n", " ").replace("\r", " ")
     return "\n".join(
         [
-            f"# proxychains config for MudaleTunnel pivot #{tunnel.pk} ({tunnel})",
+            f"# proxychains config for MudaleTunnel pivot #{tunnel.pk} ({safe_label})",
             "#",
             "#   proxychains4 -f this-file nmap -sT -Pn 10.4.50.0/24",
             "#",

@@ -88,7 +88,7 @@ export type AgentWritePayload = Partial<
   >
 >;
 
-export type TunnelKind = 'ssh_local' | 'ssh_dynamic' | 'ssh_remote' | 'ssh_remote_dynamic';
+export type TunnelKind = 'ssh_local' | 'ssh_dynamic' | 'ssh_remote' | 'ssh_remote_dynamic' | 'ligolo';
 
 export type TunnelDesiredState = 'up' | 'down';
 

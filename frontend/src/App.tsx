@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Sidebar } from './components/Sidebar';
 import { CommandPalette } from './components/CommandPalette';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -91,7 +92,9 @@ function Gate() {
   return (
     <EngagementProvider>
       <SocketProvider>
-        <Shell />
+        <ErrorBoundary>
+          <Shell />
+        </ErrorBoundary>
       </SocketProvider>
     </EngagementProvider>
   );

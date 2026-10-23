@@ -80,6 +80,23 @@ def _validate_url(url: str) -> str:
     return cleaned
 
 
+class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Strip the Authorization header when a redirect crosses origins."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is None:
+            return None
+        old_origin = urllib.parse.urlparse(req.full_url)
+        new_origin = urllib.parse.urlparse(new.full_url)
+        if (old_origin.scheme, old_origin.netloc) != (new_origin.scheme, new_origin.netloc):
+            new.remove_header("Authorization")
+        return new
+
+
+_opener = urllib.request.build_opener(_SafeRedirectHandler)
+
+
 class Client:
     def __init__(self, config: Config | None = None):
         self.config = config or Config.load()
@@ -102,6 +119,7 @@ class Client:
         """Follow pagination and return every result."""
         results: list[dict] = []
         payload = self.get(path, params)
+        server = urllib.parse.urlparse(self.config.url)
         while True:
             if isinstance(payload, list):
                 return payload
@@ -109,6 +127,9 @@ class Client:
             next_url = payload.get("next")
             if not next_url:
                 return results
+            nxt = urllib.parse.urlparse(next_url)
+            if (nxt.scheme, nxt.netloc) != (server.scheme, server.netloc):
+                raise ApiError(0, f"Pagination URL points to a different origin: {next_url}")
             payload = self._request("GET", next_url, absolute=True)
 
     # ── Transport ───────────────────────────────────────────────────────
@@ -141,7 +162,7 @@ class Client:
             request.add_header("Authorization", f"Bearer {self.config.token}")
 
         try:
-            with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310
+            with _opener.open(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310
                 raw = response.read()
                 return json.loads(raw) if raw else None
         except urllib.error.HTTPError as exc:

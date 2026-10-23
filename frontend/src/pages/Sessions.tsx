@@ -60,13 +60,21 @@ export function Sessions() {
   }, [items, textFilter]);
 
   async function handleStop(tunnel: Tunnel) {
-    await stopTunnel(tunnel.id);
-    reload();
+    try {
+      await stopTunnel(tunnel.id);
+      reload();
+    } catch (err) {
+      console.error('Failed to stop tunnel', err);
+    }
   }
 
   async function handleStart(tunnel: Tunnel) {
-    await startTunnel(tunnel.id);
-    reload();
+    try {
+      await startTunnel(tunnel.id);
+      reload();
+    } catch (err) {
+      console.error('Failed to start tunnel', err);
+    }
   }
 
   if (!selectedId) {

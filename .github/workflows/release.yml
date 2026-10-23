@@ -1,8 +1,5 @@
 name: Release
 
-# Cutting a release is deliberate: push a tag, and only then does anything get
-# published. v2 auto-released on every green CI run, which is how a build whose
-# every tunnel deadlocked ended up tagged and downloadable.
 on:
   push:
     tags: ["v*.*.*"]
@@ -19,8 +16,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Tag matches the version in the code
-        # A tag that disagrees with mudale/__init__.py means the dashboard,
-        # the CLI and the release page would all claim different things.
         run: |
           tag="${GITHUB_REF_NAME#v}"
           code="$(grep -oE '__version__ = "[^"]+"' backend/mudale/__init__.py | cut -d'"' -f2)"
@@ -35,6 +30,90 @@ jobs:
     name: Full suite
     needs: verify
     uses: ./.github/workflows/ci.yml
+
+  # ── Standalone binaries (PyInstaller) ──────────────────────────────
+
+  binaries:
+    name: Binary (${{ matrix.os }})
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: mudale-linux-amd64
+            ext: ""
+          - os: macos-latest
+            artifact: mudale-darwin-arm64
+            ext: ""
+          - os: windows-latest
+            artifact: mudale-windows-amd64
+            ext: ".exe"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          pip install pyinstaller
+          pip install pydantic defusedxml prompt_toolkit
+
+      - name: Build binary
+        working-directory: backend
+        run: |
+          pyinstaller --onefile --name mudale \
+            --hidden-import mudale_core \
+            --hidden-import mudale_core.enums \
+            --hidden-import mudale_core.specs \
+            --hidden-import mudale_core.state \
+            --hidden-import mudale_core.modules \
+            --hidden-import mudale_core.daemon \
+            --hidden-import mudale_core.process \
+            --hidden-import mudale_core.supervisor \
+            --hidden-import mudale_core.adapters \
+            --hidden-import mudale_core.adapters.base \
+            --hidden-import mudale_core.adapters.ssh \
+            --hidden-import mudale_core.adapters.nmap \
+            --hidden-import mudale_console \
+            --hidden-import mudale_console.app \
+            --hidden-import mudale_console.banner \
+            --hidden-import mudale_console.completer \
+            --hidden-import mudale_cli \
+            --hidden-import mudale_cli.main \
+            --hidden-import mudale_cli.client \
+            --hidden-import mudale_cli.output \
+            --paths . \
+            mudale_cli/main.py
+        shell: bash
+
+      - name: Rename artifact
+        working-directory: backend/dist
+        run: mv mudale${{ matrix.ext }} ${{ matrix.artifact }}${{ matrix.ext }}
+        shell: bash
+
+      - name: Smoke test (non-Windows)
+        if: matrix.os != 'windows-latest'
+        working-directory: backend/dist
+        run: |
+          chmod +x ${{ matrix.artifact }}
+          ./${{ matrix.artifact }} --help
+
+      - name: Smoke test (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: backend/dist
+        run: .\${{ matrix.artifact }}.exe --help
+        shell: pwsh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.artifact }}
+          path: backend/dist/${{ matrix.artifact }}${{ matrix.ext }}
+
+  # ── Python wheel + dashboard tarball ───────────────────────────────
 
   artifacts:
     name: Build artifacts
@@ -54,9 +133,6 @@ jobs:
 
       - name: Build the Python distribution
         working-directory: backend
-        # The wheel carries the CLI. `pip install mudaletunnel` then gives you
-        # `mudale`, which is all an operator needs on a laptop that is not the
-        # engine host.
         run: uv build --out-dir ../dist
 
       - name: Bundle the dashboard
@@ -68,6 +144,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with: { name: release-artifacts, path: dist/ }
+
+  # ── Docker image ───────────────────────────────────────────────────
 
   image:
     name: Publish image
@@ -96,16 +174,17 @@ jobs:
         with:
           context: .
           push: true
-          # linux/arm64 as well: plenty of operators run this on Apple silicon.
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # ── GitHub Release ─────────────────────────────────────────────────
+
   publish:
     name: Draft the release
-    needs: [artifacts, image]
+    needs: [artifacts, binaries, image]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -113,6 +192,19 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with: { name: release-artifacts, path: dist }
+
+      - uses: actions/download-artifact@v4
+        with: { name: binary-mudale-linux-amd64, path: dist }
+
+      - uses: actions/download-artifact@v4
+        with: { name: binary-mudale-darwin-arm64, path: dist }
+
+      - uses: actions/download-artifact@v4
+        with: { name: binary-mudale-windows-amd64, path: dist }
+
+      - name: Checksums (include binaries)
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS
 
       - name: Release notes
         id: notes
@@ -130,14 +222,31 @@ jobs:
             echo
             echo '### Install'
             echo
+            echo '#### Standalone binary (no Python needed)'
+            echo
             echo '```bash'
-            echo "docker pull ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_REF_NAME#v}"
+            echo '# Linux'
+            echo "wget https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/mudale-linux-amd64"
+            echo 'chmod +x mudale-linux-amd64 && sudo mv mudale-linux-amd64 /usr/local/bin/mudale'
+            echo
+            echo '# macOS (Apple Silicon)'
+            echo "curl -LO https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/mudale-darwin-arm64"
+            echo 'chmod +x mudale-darwin-arm64 && sudo mv mudale-darwin-arm64 /usr/local/bin/mudale'
+            echo
+            echo '# Windows'
+            echo "# Download mudale-windows-amd64.exe from the assets below"
             echo '```'
             echo
-            echo 'Or just the CLI:'
+            echo '#### pip install'
             echo
             echo '```bash'
             echo "pip install mudaletunnel==${GITHUB_REF_NAME#v}"
+            echo '```'
+            echo
+            echo '#### Docker'
+            echo
+            echo '```bash'
+            echo "docker pull ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_REF_NAME#v}"
             echo '```'
             echo
             echo 'Verify downloads against `SHA256SUMS`.'
@@ -148,6 +257,5 @@ jobs:
         with:
           files: dist/*
           body: ${{ steps.notes.outputs.body }}
-          # Drafted, not published: a human reads the notes before it goes out.
           draft: true
           generate_release_notes: false

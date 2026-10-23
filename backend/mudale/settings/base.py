@@ -200,7 +200,7 @@ SECURE_SSL_REDIRECT = env_bool("MUDALE_SSL_REDIRECT", default=True)
 # console that opens tunnels into client networks — so it is honoured *only*
 # when the deployment is loopback-only. On anything reachable from elsewhere it
 # is ignored, with a warning, rather than trusted.
-_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0"}  # noqa: S104
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]"}
 _demo_raw = env_str("MUDALE_DEMO_CREDENTIALS", default="")
 _is_loopback_only = bool(ALLOWED_HOSTS) and all(
     host.strip().lower() in _LOOPBACK_HOSTS for host in ALLOWED_HOSTS

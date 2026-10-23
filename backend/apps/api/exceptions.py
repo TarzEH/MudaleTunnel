@@ -15,10 +15,10 @@ from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
 from apps.engagements.scope import OutOfScope, ScopeViolation, TargetSyntaxError
-from apps.engine.specs import SpecError
 from apps.scans.services import PermissionDenied as ScanPermissionDenied
 from apps.tunnels.pivot import PivotError
 from apps.tunnels.services import PermissionDenied as TunnelPermissionDenied
+from mudale_engine.specs import SpecError
 
 logger = logging.getLogger(__name__)
 

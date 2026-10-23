@@ -11,7 +11,6 @@ import time
 
 import pytest
 
-from apps.engine.adapters.base import LaunchPlan
 from apps.engine.supervisor import MAX_CONSECUTIVE_FAILURES, Supervisor
 from apps.tunnels.models import (
     DesiredState,
@@ -20,6 +19,7 @@ from apps.tunnels.models import (
     TunnelLog,
     TunnelStatus,
 )
+from mudale_engine.adapters.base import LaunchPlan
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -143,7 +143,7 @@ def test_a_repeatedly_failing_tunnel_stops_being_retried(supervisor, engagement)
 
 
 def test_stop_request_is_honoured(supervisor, engagement):
-    from apps.engine.process import is_pid_alive
+    from mudale_engine.process import is_pid_alive
 
     tunnel = make_tunnel(engagement)
     supervisor.tick()

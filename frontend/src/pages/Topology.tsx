@@ -207,6 +207,9 @@ export function Topology() {
               <g
                 transform={`translate(${operatorPos.x}, ${operatorPos.y})`}
                 onClick={() => setSelectedNode({ kind: 'operator' })}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedNode({ kind: 'operator' }); } }}
+                tabIndex={0}
+                role="button"
                 className="cursor-pointer"
               >
                 <rect
@@ -233,6 +236,9 @@ export function Topology() {
                     key={pivot.tunnel}
                     transform={`translate(${pos.x}, ${pos.y})`}
                     onClick={() => setSelectedNode({ kind: 'pivot', pivot })}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedNode({ kind: 'pivot', pivot }); } }}
+                    tabIndex={0}
+                    role="button"
                     className="cursor-pointer"
                   >
                     <rect
@@ -266,6 +272,9 @@ export function Topology() {
                     key={`host-${idx}`}
                     transform={`translate(${pos.x}, ${pos.y})`}
                     onClick={() => setSelectedNode({ kind: 'host', host, pivot: ownerPivot })}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedNode({ kind: 'host', host, pivot: ownerPivot }); } }}
+                    tabIndex={0}
+                    role="button"
                     className="cursor-pointer"
                   >
                     <rect

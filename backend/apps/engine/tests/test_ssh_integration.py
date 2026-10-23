@@ -21,9 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from apps.engine.adapters.ssh import SshAdapter
-from apps.engine.process import SupervisedProcess
-from apps.engine.specs import SshDynamicForwardSpec, SshEndpoint
+from mudale_engine.adapters.ssh import SshAdapter
+from mudale_engine.process import SupervisedProcess
+from mudale_engine.specs import SshDynamicForwardSpec, SshEndpoint
 
 SSHD = "/usr/sbin/sshd"
 pytestmark = pytest.mark.skipif(
@@ -147,7 +147,7 @@ def test_socks_tunnel_actually_carries_traffic(sshd):
 
     # And stopping must really stop it — v2 left unkillable tunnels behind.
     assert outcome.requested is True
-    from apps.engine.process import is_pid_alive
+    from mudale_engine.process import is_pid_alive
 
     assert not is_pid_alive(pid)
     assert not wait_for_listener(socks_port, timeout=2.0), "the SOCKS port is still bound"

@@ -19,7 +19,7 @@ x-app: &app
   env_file: .env
   environment:
     MUDALE_DB_HOST: db
-    MUDALE_REDIS_URL: redis://redis:6379/0
+    MUDALE_REDIS_URL: redis://:${MUDALE_REDIS_PASSWORD:-mudale-redis}@redis:6379/0
     # Terminated by a proxy in a real deployment, not by the app container.
     MUDALE_SSL_REDIRECT: "false"
     MUDALE_HSTS_SECONDS: "0"
@@ -37,6 +37,7 @@ services:
   db:
     image: postgres:17-alpine
     restart: unless-stopped
+    mem_limit: 1g
     environment:
       POSTGRES_DB: ${MUDALE_DB_NAME:-mudale}
       POSTGRES_USER: ${MUDALE_DB_USER:-mudale}
@@ -56,11 +57,14 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    mem_limit: 512m
+    environment:
+      MUDALE_REDIS_PASSWORD: ${MUDALE_REDIS_PASSWORD:-mudale-redis}
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--requirepass", "${MUDALE_REDIS_PASSWORD:-mudale-redis}"]
     expose:
       - "6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$MUDALE_REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -74,6 +78,12 @@ services:
 
   web:
     <<: *app
+    mem_limit: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     command: ["daphne", "-b", "0.0.0.0", "-p", "8000", "mudale.asgi:application"]
     ports:
       # Bound to loopback. This dashboard opens tunnels into client networks;
@@ -89,6 +99,12 @@ services:
 
   engine:
     <<: *app
+    mem_limit: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     command: ["python", "manage.py", "enginectl"]
     # The image's default healthcheck probes the HTTP port, which this service
     # does not serve. Health here means "the daemon is heartbeating", which is

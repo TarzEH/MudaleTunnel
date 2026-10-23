@@ -6,8 +6,8 @@ import ipaddress
 
 import pytest
 
-from apps.engine.adapters.nmap import PROFILE_ARGS, NmapAdapter
-from apps.scans.models import ScanProfile
+from mudale_engine.adapters.nmap import PROFILE_ARGS, NmapAdapter
+from mudale_engine.enums import ScanProfile
 
 
 @pytest.fixture

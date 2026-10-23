@@ -16,9 +16,14 @@ def operator(db, django_user_model):
 
 @pytest.fixture
 def engagement(db, operator):
-    from apps.engagements.models import Engagement, EngagementStatus
+    from apps.engagements.models import (
+        Engagement,
+        EngagementMembership,
+        EngagementStatus,
+        MembershipRole,
+    )
 
-    return Engagement.objects.create(
+    eng = Engagement.objects.create(
         name="Acme internal",
         slug="acme-internal",
         client="Acme",
@@ -28,3 +33,7 @@ def engagement(db, operator):
         ends_on=dt.date(2030, 1, 1),
         created_by=operator,
     )
+    EngagementMembership.objects.create(
+        engagement=eng, operator=operator, role=MembershipRole.LEAD,
+    )
+    return eng

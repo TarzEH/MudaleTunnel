@@ -16,7 +16,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { items: tunnels } = useTunnels({});
+  const { items: tunnels } = useTunnels({ engagement: open ? undefined : -1 });
 
   useEffect(() => {
     if (open) {

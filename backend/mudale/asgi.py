@@ -9,7 +9,7 @@ accepted every handshake unconditionally.
 
 import os
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "mudale.settings.dev")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "mudale.settings.prod")
 
 from django.core.asgi import get_asgi_application  # noqa: E402
 

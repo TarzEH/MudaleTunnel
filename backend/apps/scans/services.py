@@ -45,8 +45,17 @@ def request_scan(
     not the operator's raw input — so what the engine later runs is a value that
     provably parsed as a network.
     """
-    if operator is not None and not operator.can_mutate:
-        raise PermissionDenied("Your role is read-only")
+    if operator is not None:
+        if not operator.can_mutate:
+            raise PermissionDenied("Your role is read-only")
+        from apps.engagements.models import EngagementMembership
+        membership = EngagementMembership.objects.filter(
+            engagement=engagement, operator=operator
+        ).first()
+        if membership is not None and not membership.can_mutate:
+            raise PermissionDenied(
+                f"Your engagement role ({membership.get_role_display()}) is read-only"
+            )
 
     if profile not in ScanProfile.values:
         raise ValueError(f"Unknown scan profile {profile!r}")
