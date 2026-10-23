@@ -8,7 +8,6 @@ dynamic = ["version"]
 description = "SSH tunnels, nmap scanning, network pivoting — standalone CLI or web dashboard"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-readme = "../README.md"
 authors = [
     { name = "Ori Ashkenazi", email = "oriash94@gmail.com" },
 ]
