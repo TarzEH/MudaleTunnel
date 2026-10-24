@@ -4,6 +4,13 @@ All notable changes to MudaleTunnel are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- `mudale scan export <scan-id> --format json|csv [-o FILE]` and the console
+  `export <scan-id> <file>` command to export stored scan results
+
 ## [3.1.0] — 2026-10-23
 
 ### Added

@@ -5,6 +5,7 @@
     mudale server                   Start web dashboard (Django + React)
     mudale tunnel create ...        One-shot tunnel creation
     mudale scan run ...             One-shot scan
+    mudale scan export ID           Export stored scan results (JSON/CSV)
     mudale jobs                     List active tunnels
     mudale services                 List discovered services
     mudale remote login ...         Connect to a remote server (original CLI)
@@ -228,6 +229,29 @@ def cmd_oneshot_scan_run(args) -> int:
     return EXIT_OK
 
 
+def cmd_oneshot_scan_export(args) -> int:
+    from mudale_core.export import ExportError, export_scan
+    from mudale_core.state import StateDB
+
+    try:
+        text = export_scan(StateDB(), args.scan_id, args.format)
+    except ExportError as exc:
+        output.error(str(exc))
+        return EXIT_ERROR
+
+    if args.output:
+        try:
+            with open(args.output, "w", encoding="utf-8", newline="") as fh:
+                fh.write(text)
+        except OSError as exc:
+            output.error(f"Cannot write {args.output}: {exc}")
+            return EXIT_ERROR
+        output.success(f"Scan {args.scan_id} exported to {args.output} ({args.format})")
+    else:
+        sys.stdout.write(text)
+    return EXIT_OK
+
+
 def cmd_oneshot_jobs(args) -> int:
     from mudale_core.state import StateDB
     from mudale_engine.adapters.ssh import SshAdapter
@@ -421,6 +445,14 @@ def build_parser() -> argparse.ArgumentParser:
     sr.add_argument("--profile", default="standard",
                     choices=["discovery", "quick", "standard", "full", "udp_top"])
     sr.add_argument("--via-tunnel", type=int, help="Route scan through tunnel ID")
+
+    se = scan_sub.add_parser("export", help="Export stored scan results to JSON or CSV")
+    se.set_defaults(handler=cmd_oneshot_scan_export)
+    se.add_argument("scan_id", type=int, help="ID of a stored scan")
+    se.add_argument("--format", "-f", default="json", choices=["json", "csv"],
+                    help="Output format (default: json)")
+    se.add_argument("--output", "-o", metavar="FILE",
+                    help="Write to FILE instead of stdout")
 
     # One-shot: jobs, services, kill
     jobs_p = subparsers.add_parser("jobs", help="List active tunnels and scans")

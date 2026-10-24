@@ -387,6 +387,20 @@ mudale services   # discovered services
 mudale kill 1     # stop a tunnel
 ```
 
+**Export stored scan results** (for reports) as JSON or CSV. Output goes to
+stdout unless `-o` is given; in the interactive console use
+`export <scan-id> results.json` (format taken from the extension):
+
+```bash
+mudale scan export 1                          # JSON (default) to stdout
+mudale scan export 1 --format csv -o scan.csv # one row per host/port
+```
+
+JSON has `schema_version`, a `scan` object (id, target, profile, status,
+counts, ISO 8601 UTC timestamps) and `hosts[]`, each with its `ports[]`
+(port, protocol, state, service, product, version, extra_info). CSV columns:
+`scan_id,host,hostname,port,protocol,state,service,product,version,extra_info`.
+
 ### Interactive Console
 
 The console gives an msfconsole-style workflow with tab-completion:

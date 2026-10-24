@@ -76,6 +76,7 @@ class MudaleCompleter(Completer):
             ("kill", "Stop a tunnel or scan"),
             ("sessions", "List active SSH sessions"),
             ("services", "List discovered services"),
+            ("export", "Export scan results to JSON/CSV"),
             ("forward", "Quick local forward to a service"),
             ("sync", "Sync state to web dashboard"),
             ("workspace", "Manage workspaces"),

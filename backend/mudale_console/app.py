@@ -137,6 +137,7 @@ class MudaleConsole:
                 "kill": self._cmd_kill,
                 "sessions": self._cmd_sessions,
                 "services": self._cmd_services,
+                "export": self._cmd_export,
                 "forward": self._cmd_forward,
                 "workspace": self._cmd_workspace,
                 "sync": self._cmd_sync,
@@ -476,6 +477,27 @@ class MudaleConsole:
              ("service", "SERVICE"), ("product", "PRODUCT"), ("version", "VERSION")],
         )
 
+    def _cmd_export(self, args: list[str]) -> None:
+        """Export stored scan results: export <scan-id> <file.json|file.csv>"""
+        from mudale_core.export import ExportError, export_scan
+
+        if len(args) != 2 or not args[0].isdigit():
+            print(_paint("Usage: export <scan-id> <file.json|file.csv>", "yellow"))
+            return
+        path = Path(args[1])
+        fmt = path.suffix.lstrip(".").lower()
+        try:
+            text = export_scan(self.db, int(args[0]), fmt)
+            with open(path, "w", encoding="utf-8", newline="") as fh:
+                fh.write(text)
+        except ExportError as exc:
+            print(_paint(str(exc), "red"))
+            return
+        except OSError as exc:
+            print(_paint(f"Cannot write {path}: {exc}", "red"))
+            return
+        print(_paint(f"Scan {args[0]} exported to {path}", "green"))
+
     def _cmd_forward(self, args: list[str]) -> None:
         """Quick local forward: forward <host> <port> [local_port] [tunnel_id]"""
         if len(args) < 2:
@@ -657,6 +679,7 @@ class MudaleConsole:
   {_paint('kill', 'cyan')} <id>          Stop a tunnel or scan
   {_paint('sessions', 'cyan')}           List active SSH sessions
   {_paint('services', 'cyan')}           List discovered services
+  {_paint('export', 'cyan')} <id> <file> Export scan results (.json or .csv)
   {_paint('forward', 'cyan')} <h> <p>    Quick local forward to a service
 
 {_paint('Workspace', 'bold')}
