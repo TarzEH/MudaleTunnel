@@ -41,7 +41,7 @@ jobs:
       DJANGO_SETTINGS_MODULE: mudale.settings.test
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Every source file is actually committed
         # A bare `test.py` rule in the inherited .gitignore silently excluded
@@ -104,7 +104,7 @@ jobs:
     name: Dashboard
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -136,7 +136,7 @@ jobs:
     # a release.
     needs: [backend, frontend]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v3
 
@@ -209,7 +209,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Sync version across files
         run: |
